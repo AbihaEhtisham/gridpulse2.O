@@ -4,6 +4,8 @@ import type { GraphState, Vertex, Edge, AlgorithmMode, EventLogEntry, BFSResult,
 import { generateCity, triggerStorm, repairNext, repairAuto, runBFS, runDFS, runDijkstra, getCityState } from './lib/api'
 import CityMap from './components/map/CityMap'
 import InfoCard from './components/panels/InfoCard'
+import StatsPanel from './components/panels/StatsPanel'
+import EventLog from './components/panels/EventLog'
 
 
 export default function App() {
