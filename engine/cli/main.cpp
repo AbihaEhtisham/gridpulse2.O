@@ -1,80 +1,105 @@
 #include <graph.h>
+#include <min_heap.h>
+#include <union_find.h>
+#include <bfs.h>
+#include <dfs.h>
 #include <iostream>
 
 using namespace GridPulse;
 
 int main() {
     std::cout << "========================================" << std::endl;
-    std::cout << "   GRIDPULSE — Phase 1: Graph Test" << std::endl;
+    std::cout << "   GRIDPULSE — Phase 4: BFS + DFS Test" << std::endl;
     std::cout << "========================================" << std::endl;
 
+    // Create a test city
     Graph city;
+    
+    Vertex pp;      pp.name = "Power Plant";     pp.type = POWER_PLANT;    pp.basePriority = 200;
+    Vertex sub1;    sub1.name = "Substation A";   sub1.type = SUBSTATION;   sub1.basePriority = 150;
+    Vertex sub2;    sub2.name = "Substation B";   sub2.type = SUBSTATION;   sub2.basePriority = 150;
+    Vertex hosp;    hosp.name = "City Hospital";  hosp.type = HOSPITAL;     hosp.basePriority = 100;
+    Vertex fire;    fire.name = "Fire Station";   fire.type = FIRE_STATION; fire.basePriority = 95;
+    Vertex police;  police.name = "Police HQ";    police.type = POLICE;     police.basePriority = 90;
+    Vertex res1;    res1.name = "Homes A";        res1.type = RESIDENTIAL;  res1.basePriority = 60;
+    Vertex res2;    res2.name = "Homes B";        res2.type = RESIDENTIAL;  res2.basePriority = 60;
+    Vertex res3;    res3.name = "Homes C";        res3.type = RESIDENTIAL;  res2.basePriority = 60;
+    Vertex school;  school.name = "School";       school.type = SCHOOL;     school.basePriority = 50;
 
-    // Create 6 vertices
-    std::cout << "\n[1] Creating vertices..." << std::endl;
+    city.addVertex(pp);      // 0
+    city.addVertex(sub1);    // 1
+    city.addVertex(sub2);    // 2
+    city.addVertex(hosp);    // 3
+    city.addVertex(fire);    // 4
+    city.addVertex(police);  // 5
+    city.addVertex(res1);    // 6
+    city.addVertex(res2);    // 7
+    city.addVertex(res3);    // 8
+    city.addVertex(school);  // 9
 
-    Vertex pp;      pp.name = "Power Plant Alpha";  pp.type = POWER_PLANT;   pp.basePriority = 200; pp.x = 100; pp.y = 500; pp.maxLoad = 500; pp.powered = true;
-    Vertex sub1;    sub1.name = "Substation North";  sub1.type = SUBSTATION;  sub1.basePriority = 150; sub1.x = 300; sub1.y = 200; sub1.maxLoad = 300; sub1.powered = true;
-    Vertex hosp;    hosp.name = "City Hospital";     hosp.type = HOSPITAL;    hosp.basePriority = 100; hosp.x = 500; hosp.y = 300; hosp.maxLoad = 200; hosp.powered = true;
-    Vertex fire;    fire.name = "Fire Station #1";   fire.type = FIRE_STATION;fire.basePriority = 95;  fire.x = 200; fire.y = 400; fire.maxLoad = 150; fire.powered = true;
-    Vertex res1;    res1.name = "Residential Block A";res1.type = RESIDENTIAL;res1.basePriority = 60;  res1.x = 400; res1.y = 100; res1.maxLoad = 100; res1.powered = true;
-    Vertex res2;    res2.name = "Residential Block B";res2.type = RESIDENTIAL;res2.basePriority = 60;  res2.x = 600; res2.y = 200; res2.maxLoad = 100; res2.powered = true;
+    Edge e; e.status = ACTIVE;
+    city.addEdge(0, 1, e);   // PP → Sub A
+    city.addEdge(0, 2, e);   // PP → Sub B
+    city.addEdge(1, 3, e);   // Sub A → Hospital
+    city.addEdge(1, 4, e);   // Sub A → Fire
+    city.addEdge(2, 5, e);   // Sub B → Police
+    city.addEdge(3, 6, e);   // Hospital → Homes A
+    city.addEdge(4, 7, e);   // Fire → Homes B
+    city.addEdge(5, 8, e);   // Police → Homes C
+    // School (9) intentionally disconnected
 
-    city.addVertex(pp);
-    city.addVertex(sub1);
-    city.addVertex(hosp);
-    city.addVertex(fire);
-    city.addVertex(res1);
-    city.addVertex(res2);
+    std::cout << "\n[1] City created: " << city.getVertexCount() << " vertices, "
+              << city.getEdgeCount() << " edges" << std::endl;
+    std::cout << "   Note: School is intentionally disconnected" << std::endl;
 
-    std::cout << "   Created " << city.getVertexCount() << " vertices" << std::endl;
+    // ==========================================
+    // BFS TEST
+    // ==========================================
+    std::cout << "\n[2] BFS — Reachability from Power Plant..." << std::endl;
+    BFSResult bfsResult = bfs(city, 0);
+    printBFSResult(bfsResult, city);
 
-    // Create 6 edges
-    std::cout << "\n[2] Creating edges..." << std::endl;
-
-    Edge e1; e1.resistance = 3.5; e1.capacity = 100; e1.status = ACTIVE; e1.ageFactor = 1.0;
-    Edge e2; e2.resistance = 5.2; e2.capacity = 80;  e2.status = ACTIVE; e2.ageFactor = 1.0;
-    Edge e3; e3.resistance = 4.0; e3.capacity = 60;  e3.status = ACTIVE; e3.ageFactor = 1.5;
-    Edge e4; e4.resistance = 6.1; e4.capacity = 50;  e4.status = ACTIVE; e4.ageFactor = 0.8;
-    Edge e5; e5.resistance = 3.8; e5.capacity = 40;  e5.status = ACTIVE; e5.ageFactor = 1.2;
-    Edge e6; e6.resistance = 2.5; e6.capacity = 30;  e6.status = ACTIVE; e6.ageFactor = 0.9;
-
-    city.addEdge(0, 1, e1);  // PP → Substation
-    city.addEdge(1, 2, e2);  // Substation → Hospital
-    city.addEdge(1, 3, e3);  // Substation → Fire
-    city.addEdge(1, 4, e4);  // Substation → Res A
-    city.addEdge(2, 5, e5);  // Hospital → Res B
-    city.addEdge(3, 4, e6);  // Fire → Res A
-
-    std::cout << "   Created " << city.getEdgeCount() << " edges" << std::endl;
-
-    // Print stats
-    city.printStats();
-
-    // Vertex lookup
-    std::cout << "[3] Vertex lookup:" << std::endl;
-    for (int i = 0; i < city.getVertexCount(); i++) {
-        const Vertex* v = city.getVertex(i);
-        std::cout << "   [" << i << "] " << getVertexSymbol(v->type)
-                  << " " << v->name
-                  << " (Priority: " << v->basePriority << ")" << std::endl;
+    // Find path to hospital
+    std::cout << "\n   Path from Power Plant to Hospital:" << std::endl;
+    auto path = bfsResult.getPath(3);
+    for (int v : path) {
+        std::cout << "   " << city.getVertex(v)->name;
+        if (v != path.back()) std::cout << " → ";
     }
+    std::cout << " (" << bfsResult.distance[3] << " hops)" << std::endl;
 
-    // Neighbor test
-    std::cout << "\n[4] Neighbor connections:" << std::endl;
-    for (int i = 0; i < city.getVertexCount(); i++) {
-        std::cout << "   " << city.getVertex(i)->name
-                  << " has " << city.getDegree(i) << " connections" << std::endl;
-    }
+    // ==========================================
+    // DFS TEST
+    // ==========================================
+    std::cout << "\n[3] DFS — All Connected Components..." << std::endl;
+    DFSResult dfsResult = dfsAll(city);
+    printDFSResult(dfsResult, city);
 
-    // Break an edge
-    std::cout << "\n[5] Breaking edge 2 (Substation→Hospital)..." << std::endl;
-    city.updateEdgeStatus(2, BROKEN);
-    std::cout << "   Active edges: " << city.getActiveEdges().size() << std::endl;
-    std::cout << "   Broken edges: " << city.getBrokenEdges().size() << std::endl;
+    // ==========================================
+    // STORM + BFS/DFS COMPARISON
+    // ==========================================
+    std::cout << "\n[4] Storm simulation + BFS/DFS comparison..." << std::endl;
+
+    // Break some lines
+    std::cout << "   ⚡ Storm breaks 3 lines..." << std::endl;
+    city.updateEdgeStatus(1, BROKEN);  // PP → Sub B
+    city.updateEdgeStatus(3, BROKEN);  // Sub A → Hospital
+    city.updateEdgeStatus(6, BROKEN);  // Hospital → Homes A
+
+    // BFS after storm
+    std::cout << "\n   BFS after storm (from Power Plant):" << std::endl;
+    BFSResult postStormBFS = bfs(city, 0);
+    std::cout << "   Reachable: " << postStormBFS.reachableCount << "/" << city.getVertexCount() << std::endl;
+    std::cout << "   Hospital reachable? " << (postStormBFS.pathExists(3) ? "Yes" : "No — ISOLATED!") << std::endl;
+    std::cout << "   School reachable? " << (postStormBFS.pathExists(9) ? "Yes" : "No — ISOLATED!") << std::endl;
+
+    // DFS after storm
+    std::cout << "\n   DFS after storm (component analysis):" << std::endl;
+    DFSResult postStormDFS = dfsAll(city);
+    printDFSResult(postStormDFS, city);
 
     std::cout << "\n========================================" << std::endl;
-    std::cout << "   PHASE 1 COMPLETE — GRAPH WORKS!" << std::endl;
+    std::cout << "   PHASE 4 COMPLETE — BFS + DFS WORK!" << std::endl;
     std::cout << "========================================" << std::endl;
 
     return 0;
