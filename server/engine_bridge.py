@@ -188,14 +188,120 @@ def repair_auto():
 
 
 # BFS, DFS, Dijkstra — use the C++ engine (they work without persistent state)
+
 def run_bfs(source_id=0):
-    return run_command("bfs", "--source", str(source_id))
+    """BFS on in-memory city state."""
+    global _city_state
+    if not _city_state:
+        return {"success": False, "error": "No city generated"}
+    
+    vertices = _city_state.get("vertices", [])
+    edges = _city_state.get("edges", [])
+    
+    # Build adjacency list
+    adj = {v["id"]: [] for v in vertices}
+    for e in edges:
+        if e.get("status") == 0:  # Only active edges
+            adj[e["source"]].append(e["destination"])
+            adj[e["destination"]].append(e["source"])
+    
+    # BFS
+    visited_order = []
+    distances = {v["id"]: -1 for v in vertices}
+    parent = {v["id"]: -1 for v in vertices}
+    
+    from collections import deque
+    q = deque([source_id])
+    distances[source_id] = 0
+    parent[source_id] = source_id
+    
+    while q:
+        current = q.popleft()
+        visited_order.append(current)
+        for neighbor in adj.get(current, []):
+            if distances[neighbor] == -1:
+                distances[neighbor] = distances[current] + 1
+                parent[neighbor] = current
+                q.append(neighbor)
+    
+    return {
+        "success": True,
+        "data": {
+            "reachableCount": len(visited_order),
+            "totalVertices": len(vertices),
+            "visitedOrder": visited_order,
+            "distances": [distances[v["id"]] for v in vertices],
+        }
+    }
 
 def run_dfs():
     return run_command("dfs")
 
 def run_dijkstra(source_id, target_id):
-    return run_command("dijkstra", "--from", str(source_id), "--to", str(target_id))
+    """Dijkstra on in-memory city state."""
+    global _city_state
+    if not _city_state:
+        return {"success": False, "error": "No city generated"}
+    
+    vertices = _city_state.get("vertices", [])
+    edges = _city_state.get("edges", [])
+    
+    # Build adjacency list with resistance weights
+    adj = {v["id"]: [] for v in vertices}
+    for e in edges:
+        if e.get("status") == 0:
+            adj[e["source"]].append((e["destination"], e.get("resistance", 1)))
+            adj[e["destination"]].append((e["source"], e.get("resistance", 1)))
+    
+    # Dijkstra
+    import heapq
+    INF = float('inf')
+    dist = {v["id"]: INF for v in vertices}
+    parent = {v["id"]: -1 for v in vertices}
+    dist[source_id] = 0
+    
+    pq = [(0, source_id)]
+    explored = 0
+    
+    while pq:
+        d, current = heapq.heappop(pq)
+        if d > dist[current]:
+            continue
+        explored += 1
+        if current == target_id:
+            break
+        for neighbor, weight in adj.get(current, []):
+            new_dist = d + weight
+            if new_dist < dist[neighbor]:
+                dist[neighbor] = new_dist
+                parent[neighbor] = current
+                heapq.heappush(pq, (new_dist, neighbor))
+    
+    # Reconstruct path
+    path = []
+    path_exists = dist[target_id] != INF
+    if path_exists:
+        current = target_id
+        while current != source_id:
+            path.append(current)
+            current = parent[current]
+        path.append(source_id)
+        path.reverse()
+    
+    # Build vertex objects for the path
+    vertex_map = {v["id"]: v for v in vertices}
+    path_vertices = [vertex_map[v_id] for v_id in path] if path_exists else []
+    
+    return {
+        "success": True,
+        "data": {
+            "pathExists": path_exists,
+            "totalResistance": dist[target_id] if path_exists else 0,
+            "nodesExplored": explored,
+            "pathLength": len(path),
+            "path": path_vertices,
+        }
+    }
 
 def get_health():
     global _city_state

@@ -1,12 +1,9 @@
-import StormOverlay from './components/animations/StormOverlay'
 import { useState, useCallback } from 'react'
 import type { GraphState, Vertex, Edge, AlgorithmMode, EventLogEntry, BFSResult, DFSResult, DijkstraResult } from './types/grid'
-import { generateCity, triggerStorm, repairNext, repairAuto, runBFS, runDFS, runDijkstra, getCityState } from './lib/api'
+import { generateCity, triggerStorm, repairNext, repairAuto, runBFS, runDFS, runDijkstra } from './lib/api'
 import CityMap from './components/map/CityMap'
 import InfoCard from './components/panels/InfoCard'
-import StatsPanel from './components/panels/StatsPanel'
-import EventLog from './components/panels/EventLog'
-
+import StormOverlay from './components/animations/StormOverlay'
 
 export default function App() {
   const [cityState, setCityState] = useState<GraphState | null>(null)
@@ -15,6 +12,7 @@ export default function App() {
   const [eventLog, setEventLog] = useState<EventLogEntry[]>([])
   const [health, setHealth] = useState(100)
   const [dijkstraSource, setDijkstraSource] = useState<Vertex | null>(null)
+  const [dijkstraMode, setDijkstraMode] = useState<'selecting' | 'none'>('none')
 
   // Selection state
   const [selectedVertex, setSelectedVertex] = useState<Vertex | null>(null)
@@ -29,12 +27,14 @@ export default function App() {
     setEventLog(prev => [{ id: Date.now(), timestamp: new Date().toLocaleTimeString(), icon, message }, ...prev].slice(0, 50))
   }
 
-  const updateCity = async () => {
-    try {
-      const data = await getCityState()
-      setCityState(data)
-      setHealth(data.health)
-    } catch { /* ignore */ }
+  const clearSelections = () => {
+    setSelectedVertex(null)
+    setSelectedEdge(null)
+    setDijkstraSource(null)
+    setDijkstraMode('none')
+    setHighlightedVertices([])
+    setPathVertices([])
+    setPathEdges([])
   }
 
   // ==========================================
@@ -43,11 +43,7 @@ export default function App() {
 
   const handleGenerate = async () => {
     setLoading(true)
-    setSelectedVertex(null)
-    setSelectedEdge(null)
-    setHighlightedVertices([])
-    setPathVertices([])
-    setPathEdges([])
+    clearSelections()
     addEvent('🏗️', 'Generating city grid...')
     try {
       const data = await generateCity(42)
@@ -66,9 +62,26 @@ export default function App() {
     setAlgorithmMode('storm')
     addEvent('🌪️', 'Storm approaching...')
     try {
-      const data = await triggerStorm(65, true, Math.floor(Math.random() * 1000))
-      await updateCity()
-      addEvent('⚠️', `Storm: ${data.totalLinesBroken} lines broken, health: ${data.gridHealthAfter.toFixed(0)}%`)
+      const stormData = await triggerStorm(65, true, Math.floor(Math.random() * 1000))
+      setCityState(prev => {
+        if (!prev) return prev
+        const brokenIds = new Set(stormData.brokenLines.map((bl: { id: number }) => bl.id))
+        const affectedIds = new Set(stormData.affectedFacilities.map((af: { id: number }) => af.id))
+        return {
+          ...prev,
+          activeEdges: prev.edgeCount - stormData.totalLinesBroken,
+          brokenEdges: stormData.totalLinesBroken,
+          health: stormData.gridHealthAfter,
+          edges: prev.edges.map(edge =>
+            brokenIds.has(edge.id) ? { ...edge, status: 1, statusName: 'Broken' } : edge
+          ),
+          vertices: prev.vertices.map(vertex =>
+            affectedIds.has(vertex.id) ? { ...vertex, powered: false } : vertex
+          ),
+        }
+      })
+      setHealth(stormData.gridHealthAfter)
+      addEvent('⚠️', `Storm: ${stormData.totalLinesBroken} lines broken, health: ${stormData.gridHealthAfter.toFixed(0)}%`)
     } catch {
       addEvent('❌', 'Storm simulation failed')
     }
@@ -82,7 +95,22 @@ export default function App() {
     setAlgorithmMode('repairing')
     try {
       const data = await repairNext()
-      await updateCity()
+      if (data.totalRepaired > 0 && data.repairOrder.length > 0) {
+        const repairedId = data.repairOrder[0].id
+        setCityState(prev => {
+          if (!prev) return prev
+          return {
+            ...prev,
+            activeEdges: prev.activeEdges + 1,
+            brokenEdges: prev.brokenEdges - 1,
+            health: data.gridHealthAfter,
+            edges: prev.edges.map(edge =>
+              edge.id === repairedId ? { ...edge, status: 0, statusName: 'Active' } : edge
+            ),
+          }
+        })
+        setHealth(data.gridHealthAfter)
+      }
       addEvent('🔧', `Repaired 1 line, health: ${data.gridHealthAfter.toFixed(0)}%`)
     } catch {
       addEvent('❌', 'Repair failed')
@@ -97,7 +125,21 @@ export default function App() {
     setAlgorithmMode('repairing')
     try {
       const data = await repairAuto()
-      await updateCity()
+      const repairedIds = new Set(data.repairOrder.map((e: { id: number }) => e.id))
+      setCityState(prev => {
+        if (!prev) return prev
+        return {
+          ...prev,
+          activeEdges: prev.activeEdges + data.totalRepaired,
+          brokenEdges: Math.max(0, prev.brokenEdges - data.totalRepaired),
+          health: data.gridHealthAfter,
+          edges: prev.edges.map(edge =>
+            repairedIds.has(edge.id) ? { ...edge, status: 0, statusName: 'Active' } : edge
+          ),
+          vertices: prev.vertices.map(v => ({ ...v, powered: true })),
+        }
+      })
+      setHealth(data.gridHealthAfter)
       addEvent('🔧', `Auto-repaired ${data.totalRepaired} lines, health: ${data.gridHealthAfter.toFixed(0)}%`)
     } catch {
       addEvent('❌', 'Auto-repair failed')
@@ -127,7 +169,6 @@ export default function App() {
     setAlgorithmMode('dfs')
     try {
       const data: DFSResult = await runDFS()
-      // Highlight first component
       if (data.components.length > 0) {
         setHighlightedVertices(data.components[0].vertices)
       }
@@ -141,6 +182,16 @@ export default function App() {
     }, 3000)
   }
 
+  const handleDijkstraClick = () => {
+    setDijkstraMode('selecting')
+    setDijkstraSource(null)
+    setPathVertices([])
+    setPathEdges([])
+    setSelectedVertex(null)
+    setSelectedEdge(null)
+    addEvent('🗺️', 'Dijkstra: Click SOURCE building, then TARGET building')
+  }
+
   // ==========================================
   // VERTEX / EDGE CLICK HANDLERS
   // ==========================================
@@ -148,15 +199,30 @@ export default function App() {
   const handleVertexClick = useCallback(async (vertex: Vertex) => {
     setSelectedEdge(null)
 
-    // If Dijkstra mode: first click = source, second click = target
-    if (dijkstraSource && dijkstraSource.id !== vertex.id) {
+    // Dijkstra mode
+    if (dijkstraMode === 'selecting') {
+      if (!dijkstraSource) {
+        // First click = source
+        setDijkstraSource(vertex)
+        setSelectedVertex(vertex)
+        addEvent('🗺️', `Source: ${vertex.name}. Now click TARGET building.`)
+        return
+      }
+      
+      if (dijkstraSource.id === vertex.id) {
+        addEvent('⚠️', 'Source and target must be different buildings')
+        return
+      }
+
+      // Second click = target
+      setSelectedVertex(vertex)
       setAlgorithmMode('dijkstra')
       addEvent('🗺️', `Finding route: ${dijkstraSource.name} → ${vertex.name}`)
+      
       try {
         const data: DijkstraResult = await runDijkstra(dijkstraSource.id, vertex.id)
-        if (data.pathExists) {
+        if (data.pathExists && data.path.length > 0) {
           setPathVertices(data.path.map((v: Vertex) => v.id))
-          // Find edges along the path
           const edgeIds: number[] = []
           for (let i = 0; i < data.path.length - 1; i++) {
             const fromId = data.path[i].id
@@ -169,24 +235,28 @@ export default function App() {
           setPathEdges(edgeIds)
           addEvent('✅', `Route found: ${data.pathLength} hops, ${data.totalResistance.toFixed(1)}Ω`)
         } else {
-          addEvent('❌', 'No path exists between selected nodes')
+          addEvent('❌', 'No path exists — buildings may be disconnected after storm damage')
         }
       } catch {
         addEvent('❌', 'Dijkstra failed')
       }
+      
+      setDijkstraMode('none')
       setDijkstraSource(null)
       setAlgorithmMode('none')
-      setTimeout(() => { setPathVertices([]); setPathEdges([]) }, 6000)
+      setTimeout(() => { setPathVertices([]); setPathEdges([]) }, 8000)
       return
     }
 
+    // Normal click
     setDijkstraSource(vertex)
     setSelectedVertex(vertex)
-  }, [dijkstraSource, cityState])
+  }, [dijkstraMode, dijkstraSource, cityState])
 
   const handleEdgeClick = useCallback((edge: Edge) => {
     setSelectedVertex(null)
     setDijkstraSource(null)
+    setDijkstraMode('none')
     setSelectedEdge(edge)
   }, [])
 
@@ -210,7 +280,11 @@ export default function App() {
           {algorithmMode === 'repairing' && <span className="text-warning font-semibold animate-pulse">🔧 Repairing</span>}
           {algorithmMode === 'bfs' && <span className="text-info font-semibold">🔍 BFS Running</span>}
           {algorithmMode === 'dfs' && <span className="text-info font-semibold">🔍 DFS Running</span>}
-          {dijkstraSource && <span className="text-accent font-semibold">🗺️ Select target for {dijkstraSource.name}</span>}
+          {dijkstraMode === 'selecting' && (
+            <span className="text-accent font-semibold animate-pulse">
+              {!dijkstraSource ? '👆 Click SOURCE building' : `👆 Now click TARGET for ${dijkstraSource.name}`}
+            </span>
+          )}
           <div className="text-right">
             <p className="text-xs text-text-secondary">Grid Health</p>
             <p className="text-2xl font-bold" style={{ color: health > 80 ? '#22C55E' : health > 50 ? '#F59E0B' : '#EF4444' }}>
@@ -232,36 +306,35 @@ export default function App() {
           <div className="border-t border-border-subtle my-2" />
           <button onClick={handleBFS} disabled={!cityState || loading} className="btn-info">🔍 BFS</button>
           <button onClick={handleDFS} disabled={!cityState || loading} className="btn-info">🔍 DFS</button>
-          <button onClick={() => { setDijkstraSource(null); setPathVertices([]); setPathEdges([]); addEvent('🗺️', 'Click source then target for Dijkstra') }}
-                  disabled={!cityState || loading} className="btn-info">🗺️ Dijkstra</button>
+          <button 
+            onClick={handleDijkstraClick} 
+            disabled={!cityState || loading} 
+            className={`btn-info ${dijkstraMode === 'selecting' ? 'ring-2 ring-info ring-offset-1' : ''}`}
+          >
+            🗺️ Dijkstra
+          </button>
           <div className="border-t border-border-subtle my-2" />
-          <button onClick={() => { setSelectedVertex(null); setSelectedEdge(null); setDijkstraSource(null); setHighlightedVertices([]); setPathVertices([]); setPathEdges([]) }}
-                  className="btn-ghost text-xs">✕ Clear Selection</button>
+          <button onClick={clearSelections} className="btn-ghost text-xs">✕ Clear Selection</button>
         </div>
 
         {/* Center - City Map */}
-<div className="flex-1 glass-card overflow-hidden relative">
-  <CityMap
-    cityState={cityState}
-    selectedVertex={selectedVertex}
-    selectedEdge={selectedEdge}
-    highlightedVertices={highlightedVertices}
-    pathVertices={pathVertices}
-    pathEdges={pathEdges}
-    onVertexClick={handleVertexClick}
-    onEdgeClick={handleEdgeClick}
-  />
-
-  <StormOverlay
-    isActive={algorithmMode === "storm"}
-    severity={65}
-  />
-</div>
+        <div className="flex-1 glass-card overflow-hidden relative">
+          <CityMap
+            cityState={cityState}
+            selectedVertex={selectedVertex}
+            selectedEdge={selectedEdge}
+            highlightedVertices={highlightedVertices}
+            pathVertices={pathVertices}
+            pathEdges={pathEdges}
+            onVertexClick={handleVertexClick}
+            onEdgeClick={handleEdgeClick}
+          />
+          <StormOverlay isActive={algorithmMode === 'storm'} severity={65} />
+        </div>
 
         {/* Right Panel */}
         <div className="w-64 flex flex-col gap-4">
-          {/* Stats */}
-          <InfoCard selectedVertex={selectedVertex} selectedEdge={selectedEdge} />
+          <InfoCard selectedVertex={selectedVertex} selectedEdge={selectedEdge} health={health} />
           
           <div className="glass-card p-4">
             <h2 className="text-sm font-semibold text-text-secondary mb-3">STATS</h2>
@@ -277,7 +350,6 @@ export default function App() {
             )}
           </div>
 
-          {/* Event Log */}
           <div className="glass-card p-4 flex-1 overflow-hidden flex flex-col">
             <h2 className="text-sm font-semibold text-text-secondary mb-3">EVENT LOG</h2>
             <div className="flex-1 overflow-y-auto space-y-2 text-xs">
