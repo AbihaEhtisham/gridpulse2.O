@@ -18,6 +18,7 @@ add_library(engine STATIC
     src/repair_engine.cpp
     src/city_state.cpp
     src/monte_carlo.cpp
+    src/json_output.cpp        # ← ADD THIS LINE
 )
 
 target_include_directories(engine PUBLIC 
