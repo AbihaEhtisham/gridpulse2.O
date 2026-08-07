@@ -84,6 +84,19 @@ export default function PowerLine({ edge, sourceX, sourceY, destX, destY, isSele
           {edge.resistance.toFixed(1)}Ω
         </text>
       </g>
+      {/* Repair animation */}
+{edge.status === 3 && (
+  <motion.line
+    x1={sourceX} y1={sourceY}
+    x2={destX} y2={destY}
+    stroke="#F97316"
+    strokeWidth={4}
+    strokeLinecap="round"
+    initial={{ opacity: 0 }}
+    animate={{ opacity: [0, 1, 0.5, 1] }}
+    transition={{ duration: 0.8, repeat: 2 }}
+  />
+)}
     </motion.g>
   )
 }

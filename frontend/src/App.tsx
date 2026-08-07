@@ -1,8 +1,10 @@
+import StormOverlay from './components/animations/StormOverlay'
 import { useState, useCallback } from 'react'
 import type { GraphState, Vertex, Edge, AlgorithmMode, EventLogEntry, BFSResult, DFSResult, DijkstraResult } from './types/grid'
 import { generateCity, triggerStorm, repairNext, repairAuto, runBFS, runDFS, runDijkstra, getCityState } from './lib/api'
 import CityMap from './components/map/CityMap'
 import InfoCard from './components/panels/InfoCard'
+
 
 export default function App() {
   const [cityState, setCityState] = useState<GraphState | null>(null)
@@ -236,18 +238,23 @@ export default function App() {
         </div>
 
         {/* Center - City Map */}
-        <div className="flex-1 glass-card overflow-hidden">
-          <CityMap
-            cityState={cityState}
-            selectedVertex={selectedVertex}
-            selectedEdge={selectedEdge}
-            highlightedVertices={highlightedVertices}
-            pathVertices={pathVertices}
-            pathEdges={pathEdges}
-            onVertexClick={handleVertexClick}
-            onEdgeClick={handleEdgeClick}
-          />
-        </div>
+<div className="flex-1 glass-card overflow-hidden relative">
+  <CityMap
+    cityState={cityState}
+    selectedVertex={selectedVertex}
+    selectedEdge={selectedEdge}
+    highlightedVertices={highlightedVertices}
+    pathVertices={pathVertices}
+    pathEdges={pathEdges}
+    onVertexClick={handleVertexClick}
+    onEdgeClick={handleEdgeClick}
+  />
+
+  <StormOverlay
+    isActive={algorithmMode === "storm"}
+    severity={65}
+  />
+</div>
 
         {/* Right Panel */}
         <div className="w-64 flex flex-col gap-4">
