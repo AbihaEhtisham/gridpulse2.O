@@ -32,6 +32,7 @@ export default function CityMap({
   const [pan, setPan] = useState({ x: 0, y: 0 })
   const isPanning = useRef(false)
   const lastMouse = useRef({ x: 0, y: 0 })
+  
 
   const handleWheel = useCallback((e: React.WheelEvent) => {
     e.preventDefault()
@@ -110,6 +111,24 @@ if (!cityState || cityState.vertices.length === 0) {
       onMouseLeave={handleMouseUp}
       style={{ background: '#FFFFFF', borderRadius: 12, cursor: isPanning.current ? 'grabbing' : 'grab' }}
     >
+      {/* Grid background image — behind everything */}
+      <image
+        href="/icons/grid-bg.png"
+        x={0}
+        y={0}
+        width={800}
+        height={600}
+        preserveAspectRatio="xMidYMid slice"
+        opacity={0.6}
+        style={{ pointerEvents: 'none' }}
+      />
+
+      <defs>
+        <filter id="zoomShadow">
+          <feDropShadow dx={0} dy={2} stdDeviation={3} floodOpacity={0.1} />
+        </filter>
+      </defs>
+
       <g transform={`translate(${pan.x},${pan.y}) scale(${zoom})`}>
         {/* Edges */}
         {cityState.edges.map(edge => {
@@ -147,46 +166,39 @@ if (!cityState || cityState.vertices.length === 0) {
         ))}
       </g>
 
-{/* Zoom controls */}
-<g transform="translate(760, 20)">
-  {/* Background card with shadow */}
-  <rect x={0} y={0} width={36} height={72} rx={12} fill="white" stroke="#E5E7EB" 
-        filter="url(#zoomShadow)" />
-  
-  {/* Shadow filter */}
-  <defs>
-    <filter id="zoomShadow">
-      <feDropShadow dx={0} dy={2} stdDeviation={3} floodOpacity={0.1} />
-    </filter>
-  </defs>
-  
-  {/* Zoom In */}
-  <rect x={4} y={4} width={28} height={28} rx={8} fill="#3B82F6" 
-        style={{ cursor: 'pointer', transition: 'all 0.2s' }}
-        onClick={() => setZoom(z => Math.min(2.5, +(z + 0.15).toFixed(2)))}
-        onMouseEnter={(e) => (e.currentTarget.style.fill = '#2563EB')}
-        onMouseLeave={(e) => (e.currentTarget.style.fill = '#3B82F6')}
-  />
-  <text x={18} y={21} textAnchor="middle" fontSize={14} fill="white" fontWeight="bold"
-        style={{ cursor: 'pointer', pointerEvents: 'none' }}>
-    +
-  </text>
-  
-  {/* Divider */}
-  <line x1={8} y1={36} x2={28} y2={36} stroke="#E5E7EB" strokeWidth={1} />
-  
-  {/* Zoom Out */}
-  <rect x={4} y={40} width={28} height={28} rx={8} fill="#3B82F6"
-        style={{ cursor: 'pointer', transition: 'all 0.2s' }}
-        onClick={() => setZoom(z => Math.max(0.3, +(z - 0.15).toFixed(2)))}
-        onMouseEnter={(e) => (e.currentTarget.style.fill = '#2563EB')}
-        onMouseLeave={(e) => (e.currentTarget.style.fill = '#3B82F6')}
-  />
-  <text x={18} y={58} textAnchor="middle" fontSize={16} fill="white" fontWeight="bold"
-        style={{ cursor: 'pointer', pointerEvents: 'none' }}>
-    −
-  </text>
-</g>
+      {/* Zoom controls */}
+      <g transform="translate(760, 20)">
+        {/* Background card with shadow */}
+        <rect x={0} y={0} width={36} height={72} rx={12} fill="white" stroke="#E5E7EB" 
+              filter="url(#zoomShadow)" />
+        
+        {/* Zoom In */}
+        <rect x={4} y={4} width={28} height={28} rx={8} fill="#3B82F6" 
+              style={{ cursor: 'pointer', transition: 'all 0.2s' }}
+              onClick={() => setZoom(z => Math.min(2.5, +(z + 0.15).toFixed(2)))}
+              onMouseEnter={(e) => (e.currentTarget.style.fill = '#2563EB')}
+              onMouseLeave={(e) => (e.currentTarget.style.fill = '#3B82F6')}
+        />
+        <text x={18} y={21} textAnchor="middle" fontSize={14} fill="white" fontWeight="bold"
+              style={{ cursor: 'pointer', pointerEvents: 'none' }}>
+          +
+        </text>
+        
+        {/* Divider */}
+        <line x1={8} y1={36} x2={28} y2={36} stroke="#E5E7EB" strokeWidth={1} />
+        
+        {/* Zoom Out */}
+        <rect x={4} y={40} width={28} height={28} rx={8} fill="#3B82F6"
+              style={{ cursor: 'pointer', transition: 'all 0.2s' }}
+              onClick={() => setZoom(z => Math.max(0.3, +(z - 0.15).toFixed(2)))}
+              onMouseEnter={(e) => (e.currentTarget.style.fill = '#2563EB')}
+              onMouseLeave={(e) => (e.currentTarget.style.fill = '#3B82F6')}
+        />
+        <text x={18} y={58} textAnchor="middle" fontSize={16} fill="white" fontWeight="bold"
+              style={{ cursor: 'pointer', pointerEvents: 'none' }}>
+          −
+        </text>
+      </g>
 
       {/* Hover tooltip */}
       {(hoveredVertex || hoveredEdge) && (

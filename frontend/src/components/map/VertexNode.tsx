@@ -7,6 +7,7 @@ interface VertexNodeProps {
   isSelected: boolean
   isHighlighted: boolean
   isInPath: boolean
+  isExplored: boolean   // ← ADD
   onClick: (vertex: Vertex) => void
   onHover: (vertex: Vertex | null) => void
 }
@@ -28,7 +29,7 @@ function getIconFile(type: number): string {
   return icons[type] || 'residential.png'
 }
 
-export default function VertexNode({ vertex, isSelected, isHighlighted, isInPath, onClick, onHover }: VertexNodeProps) {
+export default function VertexNode({ vertex, isSelected, isHighlighted, isInPath, isExplored, onClick, onHover }: VertexNodeProps) {
   const color = VERTEX_COLORS[vertex.type] || '#999'
   const size = vertex.type === 0 ? 48 : vertex.type === 1 ? 40 : vertex.type >= 2 && vertex.type <= 6 ? 36 : 28
   const isUnpowered = !vertex.powered
@@ -68,6 +69,20 @@ export default function VertexNode({ vertex, isSelected, isHighlighted, isInPath
           stroke="#3B82F6"
           strokeWidth={2}
           opacity={0.6}
+        />
+      )}
+
+      {/* Explored ring */}
+      {isExplored && !isSelected && !isInPath && (
+        <circle
+          cx={vertex.x}
+          cy={vertex.y}
+          r={size / 2 + 4}
+          fill="none"
+          stroke="#3B82F6"
+          strokeWidth={2}
+          opacity={0.5}
+          strokeDasharray="6,3"
         />
       )}
 

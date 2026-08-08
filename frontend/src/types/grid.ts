@@ -86,6 +86,10 @@ export interface HealthData {
   totalEdges: number
   totalVertices: number
 }
+export interface GraphState {
+  // ... existing fields ...
+  exploredEdges?: number[]   // ← ADD THIS
+}
 
 export interface RepairQueueItem {
   lineId: number

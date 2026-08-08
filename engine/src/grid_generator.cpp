@@ -75,6 +75,36 @@ static Position placeInCluster(double centerX, double centerY, double radius) {
 }
 
 // ============================================================
+// OVERLAP CHECK
+// ============================================================
+
+static bool isTooClose(double x, double y, const Graph& city, double minDistance = 30.0) {
+    for (int i = 0; i < city.getVertexCount(); i++) {
+        const Vertex* existing = city.getVertex(i);
+        if (!existing) continue;
+        double dx = x - existing->x;
+        double dy = y - existing->y;
+        double dist = sqrt(dx * dx + dy * dy);
+        if (dist < minDistance) return true;
+    }
+    return false;
+}
+
+static Position placeWithSpacing(double targetX, double targetY, double spread, const Graph& city, double minDist = 30.0) {
+    Position pos;
+    int attempts = 0;
+    const int maxAttempts = 50;
+    
+    do {
+        pos.x = targetX + randomDouble(-spread, spread);
+        pos.y = targetY + randomDouble(-spread, spread);
+        attempts++;
+    } while (isTooClose(pos.x, pos.y, city, minDist) && attempts < maxAttempts);
+    
+    return pos;
+}
+
+// ============================================================
 // MAIN GENERATION
 // ============================================================
 
@@ -135,9 +165,9 @@ GridGenerationResult generateCity(const GridConfig& config) {
         v.basePriority = getDefaultPriority(HOSPITAL);
         v.maxLoad = getDefaultMaxLoad(HOSPITAL);
         v.powered = true;
-        Position pos = placeNearCenter();
-        v.x = pos.x + randomDouble(-60, 60);
-        v.y = pos.y + randomDouble(-40, 40);
+        Position pos = placeWithSpacing(400, 300, 80, city, 35.0);
+        v.x = pos.x;
+        v.y = pos.y;
         city.addVertex(v);
         result.verticesCreated++;
     }
@@ -151,8 +181,9 @@ GridGenerationResult generateCity(const GridConfig& config) {
         v.basePriority = getDefaultPriority(FIRE_STATION);
         v.maxLoad = getDefaultMaxLoad(FIRE_STATION);
         v.powered = true;
-        v.x = randomDouble(200, 600);
-        v.y = randomDouble(150, 450);
+        Position pos = placeWithSpacing(400, 300, 150, city, 30.0);
+        v.x = pos.x;
+        v.y = pos.y;
         city.addVertex(v);
         result.verticesCreated++;
     }
@@ -166,8 +197,9 @@ GridGenerationResult generateCity(const GridConfig& config) {
         v.basePriority = getDefaultPriority(POLICE);
         v.maxLoad = getDefaultMaxLoad(POLICE);
         v.powered = true;
-        v.x = randomDouble(150, 650);
-        v.y = randomDouble(200, 400);
+        Position pos = placeWithSpacing(400, 300, 200, city, 30.0);
+        v.x = pos.x;
+        v.y = pos.y;
         city.addVertex(v);
         result.verticesCreated++;
     }
@@ -181,8 +213,9 @@ GridGenerationResult generateCity(const GridConfig& config) {
         v.basePriority = getDefaultPriority(EMERGENCY);
         v.maxLoad = getDefaultMaxLoad(EMERGENCY);
         v.powered = true;
-        Position pos = placeNearCenter();
-        v.x = pos.x; v.y = pos.y;
+        Position pos = placeWithSpacing(400, 300, 60, city, 35.0);
+        v.x = pos.x;
+        v.y = pos.y;
         city.addVertex(v);
         result.verticesCreated++;
     }
@@ -196,8 +229,15 @@ GridGenerationResult generateCity(const GridConfig& config) {
         v.basePriority = getDefaultPriority(WATER_TREATMENT);
         v.maxLoad = getDefaultMaxLoad(WATER_TREATMENT);
         v.powered = true;
-        Position pos = placeOnOutskirts();
-        v.x = pos.x; v.y = pos.y;
+        Position pos = placeWithSpacing(400, 300, 250, city, 35.0);
+        v.x = pos.x;
+        v.y = pos.y;
+        // If still overlapping, push to outskirts
+        if (isTooClose(v.x, v.y, city, 25.0)) {
+            Position fallback = placeOnOutskirts();
+            v.x = fallback.x;
+            v.y = fallback.y;
+        }
         city.addVertex(v);
         result.verticesCreated++;
     }
@@ -214,8 +254,9 @@ GridGenerationResult generateCity(const GridConfig& config) {
             v.basePriority = getDefaultPriority(RESIDENTIAL);
             v.maxLoad = getDefaultMaxLoad(RESIDENTIAL);
             v.powered = true;
-            Position pos = placeInCluster(sub->x, sub->y, 80);
-            v.x = pos.x; v.y = pos.y;
+            Position pos = placeWithSpacing(sub->x, sub->y, 80, city, 28.0);
+            v.x = pos.x;
+            v.y = pos.y;
             city.addVertex(v);
             result.verticesCreated++;
         }
@@ -230,7 +271,9 @@ GridGenerationResult generateCity(const GridConfig& config) {
         v.basePriority = getDefaultPriority(COMMERCIAL);
         v.maxLoad = getDefaultMaxLoad(COMMERCIAL);
         v.powered = true;
-        v.x = randomDouble(200, 600); v.y = randomDouble(100, 500);
+        Position pos = placeWithSpacing(400, 300, 200, city, 30.0);
+        v.x = pos.x;
+        v.y = pos.y;
         city.addVertex(v);
         result.verticesCreated++;
     }
@@ -244,8 +287,14 @@ GridGenerationResult generateCity(const GridConfig& config) {
         v.basePriority = getDefaultPriority(INDUSTRIAL);
         v.maxLoad = getDefaultMaxLoad(INDUSTRIAL);
         v.powered = true;
-        Position pos = placeOnOutskirts();
-        v.x = pos.x; v.y = pos.y;
+        Position pos = placeWithSpacing(400, 300, 250, city, 35.0);
+        v.x = pos.x;
+        v.y = pos.y;
+        if (isTooClose(v.x, v.y, city, 25.0)) {
+            Position fallback = placeOnOutskirts();
+            v.x = fallback.x;
+            v.y = fallback.y;
+        }
         city.addVertex(v);
         result.verticesCreated++;
     }
@@ -259,8 +308,9 @@ GridGenerationResult generateCity(const GridConfig& config) {
         v.basePriority = getDefaultPriority(SCHOOL);
         v.maxLoad = getDefaultMaxLoad(SCHOOL);
         v.powered = true;
-        Position pos = placeInCluster(400, 300, 120);
-        v.x = pos.x; v.y = pos.y;
+        Position pos = placeWithSpacing(400, 300, 120, city, 28.0);
+        v.x = pos.x;
+        v.y = pos.y;
         city.addVertex(v);
         result.verticesCreated++;
     }
