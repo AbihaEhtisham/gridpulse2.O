@@ -1,7 +1,7 @@
 @import "tailwindcss";
 
 @theme {
-  --color-bg-primary: #F8F9FA;
+  --color-bg-primary:#1A1A1F;
   --color-bg-secondary: #FFFFFF;
   --color-bg-glass: rgba(255, 255, 255, 0.7);
   --color-border-subtle: #E5E7EB;
@@ -18,7 +18,7 @@
 
 body {
   font-family: 'Inter', system-ui, sans-serif;
-  background: var(--color-bg-primary);
+  background:  #1A1A1F;
   color: var(--color-text-primary);
   -webkit-font-smoothing: antialiased;
 }
@@ -86,6 +86,15 @@ body {
 .border-panel-stats { border-color: #EBE5FA; }
 .border-panel-events { border-color: #E0E8FA; }
 
+/* Ensure the full page uses the dark background */
+html {
+  background: #1A1A1F;
+}
+
+/* Hide fallback gradient when image loads */
+img[src="/icons/city.png"]:not([style*="display: none"]) + div + .city-fallback {
+  display: none;
+}
 /* ============================================
    ANIMATIONS
    ============================================ */
@@ -115,6 +124,34 @@ body {
 @keyframes brokenFlicker {
   0%, 100% { opacity: 0.3; }
   50% { opacity: 1; }
+}
+
+/* Header glow animation */
+@keyframes headerGlow {
+  0%, 100% { backgroundPosition: '0% 50%'; }
+  50% { backgroundPosition: '100% 50%'; }
+}
+
+/* Floating particles */
+/* Floating particles — more visible */
+@keyframes floatUp {
+  0% {
+    opacity: 0;
+    transform: translateY(24px) scale(0);
+  }
+  15% {
+    opacity: 0.8;
+  }
+  50% {
+    opacity: 0.5;
+  }
+  85% {
+    opacity: 0.15;
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-24px) scale(2);
+  }
 }
 
 .line-broken {
@@ -157,4 +194,8 @@ body {
 
 .animate-slide-in {
   animation: slideInRight 0.3s ease-out;
+}
+/* Hide fallback when logo image loads successfully */
+img[src="/icons/logo.png"]:not([style*="display: none"]) + .logo-fallback {
+  display: none;
 }

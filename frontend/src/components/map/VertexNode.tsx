@@ -1,6 +1,6 @@
 import { motion } from 'framer-motion'
 import type { Vertex } from '../../types/grid'
-import { VERTEX_COLORS, VERTEX_RADIUS } from '../../lib/constants'
+import { VERTEX_COLORS } from '../../lib/constants'
 
 interface VertexNodeProps {
   vertex: Vertex
@@ -11,9 +11,26 @@ interface VertexNodeProps {
   onHover: (vertex: Vertex | null) => void
 }
 
+function getIconFile(type: number): string {
+  const icons: Record<number, string> = {
+    0: 'power-plant.png',
+    1: 'substation.png',
+    2: 'hospital.png',
+    3: 'fire-station.png',
+    4: 'police.png',
+    5: 'emergency.png',
+    6: 'water.png',
+    7: 'residential.png',
+    8: 'commercial.png',
+    9: 'industrial.png',
+    10: 'school.png',
+  }
+  return icons[type] || 'residential.png'
+}
+
 export default function VertexNode({ vertex, isSelected, isHighlighted, isInPath, onClick, onHover }: VertexNodeProps) {
   const color = VERTEX_COLORS[vertex.type] || '#999'
-  const radius = VERTEX_RADIUS[vertex.type] || 14
+  const size = vertex.type === 0 ? 48 : vertex.type === 1 ? 40 : vertex.type >= 2 && vertex.type <= 6 ? 36 : 28
   const isUnpowered = !vertex.powered
 
   return (
@@ -26,12 +43,12 @@ export default function VertexNode({ vertex, isSelected, isHighlighted, isInPath
       onMouseLeave={() => onHover(null)}
       style={{ cursor: 'pointer' }}
     >
-      {/* Glow ring when selected or in path */}
+      {/* Selection glow */}
       {(isSelected || isInPath) && (
         <circle
           cx={vertex.x}
           cy={vertex.y}
-          r={radius + 6}
+          r={size / 2 + 6}
           fill="none"
           stroke={isInPath ? '#FFD700' : '#FF6B2C'}
           strokeWidth={3}
@@ -41,12 +58,12 @@ export default function VertexNode({ vertex, isSelected, isHighlighted, isInPath
         </circle>
       )}
 
-      {/* Highlight ring for BFS/DFS */}
+      {/* BFS/DFS highlight */}
       {isHighlighted && !isSelected && !isInPath && (
         <circle
           cx={vertex.x}
           cy={vertex.y}
-          r={radius + 5}
+          r={size / 2 + 5}
           fill="none"
           stroke="#3B82F6"
           strokeWidth={2}
@@ -54,38 +71,49 @@ export default function VertexNode({ vertex, isSelected, isHighlighted, isInPath
         />
       )}
 
-      {/* Main circle */}
-      <circle
-        cx={vertex.x}
-        cy={vertex.y}
-        r={radius}
-        fill={color}
-        stroke={isSelected ? '#111' : 'white'}
-        strokeWidth={isSelected ? 3 : 1.5}
-        opacity={isUnpowered ? 0.4 : 1}
+      {/* Clip path for circular image */}
+      <defs>
+        <clipPath id={`circle-clip-${vertex.id}`}>
+          <circle cx={vertex.x} cy={vertex.y} r={size / 2} />
+        </clipPath>
+      </defs>
+
+      {/* White background circle (hides image corners) */}
+      <circle cx={vertex.x} cy={vertex.y} r={size / 2 + 1} fill="white" />
+
+      {/* Icon image clipped to circle */}
+      <image
+        href={`/icons/${getIconFile(vertex.type)}`}
+        x={vertex.x - size / 2}
+        y={vertex.y - size / 2}
+        width={size}
+        height={size}
+        clipPath={`url(#circle-clip-${vertex.id})`}
+        preserveAspectRatio="xMidYMid slice"
+        opacity={isUnpowered ? 0.35 : 1}
         style={{ transition: 'opacity 0.3s' }}
       />
 
-      {/* Icon / Label */}
-      <text
-        x={vertex.x}
-        y={vertex.y + 1}
-        textAnchor="middle"
-        dominantBaseline="central"
-        fontSize={radius * 0.7}
-        fill="white"
-        style={{ pointerEvents: 'none', fontWeight: 'bold' }}
-      >
-        {vertex.symbol || vertex.typeName.charAt(0)}
-      </text>
+      {/* Colored border ring */}
+      <circle
+        cx={vertex.x}
+        cy={vertex.y}
+        r={size / 2}
+        fill="none"
+        stroke={isSelected ? '#111' : color}
+        strokeWidth={isSelected ? 2.5 : 1.5}
+        opacity={isUnpowered ? 0.4 : 1}
+        style={{ transition: 'opacity 0.3s, stroke 0.3s' }}
+      />
 
       {/* Name label */}
       <text
         x={vertex.x}
-        y={vertex.y + radius + 13}
+        y={vertex.y + size / 2 + 12}
         textAnchor="middle"
         fontSize={9}
-        fill="#6B7280"
+        fill="#4B5563"
+        fontWeight={500}
         style={{ pointerEvents: 'none' }}
       >
         {vertex.name.length > 14 ? vertex.name.substring(0, 13) + '…' : vertex.name}
@@ -95,13 +123,14 @@ export default function VertexNode({ vertex, isSelected, isHighlighted, isInPath
       {isUnpowered && (
         <text
           x={vertex.x}
-          y={vertex.y - radius - 8}
+          y={vertex.y - size / 2 - 6}
           textAnchor="middle"
-          fontSize={10}
+          fontSize={9}
           fill="#EF4444"
+          fontWeight="bold"
           style={{ pointerEvents: 'none' }}
         >
-          ⚡✕
+          ✕
         </text>
       )}
     </motion.g>

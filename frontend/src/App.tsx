@@ -57,38 +57,43 @@ export default function App() {
     setLoading(false)
   }
 
-  const handleStorm = async () => {
-    if (!cityState) return
-    setLoading(true)
-    setAlgorithmMode('storm')
-    addEvent('🌪️', 'Storm approaching...')
-    try {
-      const stormData = await triggerStorm(65, true, Math.floor(Math.random() * 1000))
-      setCityState(prev => {
-        if (!prev) return prev
-        const brokenIds = new Set(stormData.brokenLines.map((bl: { id: number }) => bl.id))
-        const affectedIds = new Set(stormData.affectedFacilities.map((af: { id: number }) => af.id))
-        return {
-          ...prev,
-          activeEdges: prev.edgeCount - stormData.totalLinesBroken,
-          brokenEdges: stormData.totalLinesBroken,
-          health: stormData.gridHealthAfter,
-          edges: prev.edges.map(edge =>
-            brokenIds.has(edge.id) ? { ...edge, status: 1, statusName: 'Broken' } : edge
-          ),
-          vertices: prev.vertices.map(vertex =>
-            affectedIds.has(vertex.id) ? { ...vertex, powered: false } : vertex
-          ),
-        }
-      })
-      setHealth(stormData.gridHealthAfter)
-      addEvent('⚠️', `Storm: ${stormData.totalLinesBroken} lines broken, health: ${stormData.gridHealthAfter.toFixed(0)}%`)
-    } catch {
-      addEvent('❌', 'Storm simulation failed')
-    }
+const handleStorm = async () => {
+  if (!cityState) return
+  setLoading(true)
+  setAlgorithmMode('storm')
+  addEvent('🌪️', 'Storm approaching...')
+  
+  try {
+    const stormData = await triggerStorm(65, true, Math.floor(Math.random() * 1000))
+    setCityState(prev => {
+      if (!prev) return prev
+      const brokenIds = new Set(stormData.brokenLines.map((bl: { id: number }) => bl.id))
+      const affectedIds = new Set(stormData.affectedFacilities.map((af: { id: number }) => af.id))
+      return {
+        ...prev,
+        activeEdges: prev.edgeCount - stormData.totalLinesBroken,
+        brokenEdges: stormData.totalLinesBroken,
+        health: stormData.gridHealthAfter,
+        edges: prev.edges.map(edge =>
+          brokenIds.has(edge.id) ? { ...edge, status: 1, statusName: 'Broken' } : edge
+        ),
+        vertices: prev.vertices.map(vertex =>
+          affectedIds.has(vertex.id) ? { ...vertex, powered: false } : vertex
+        ),
+      }
+    })
+    setHealth(stormData.gridHealthAfter)
+    addEvent('⚠️', `Storm: ${stormData.totalLinesBroken} lines broken, health: ${stormData.gridHealthAfter.toFixed(0)}%`)
+  } catch {
+    addEvent('❌', 'Storm simulation failed')
+  }
+  
+  // Keep animation visible longer
+  setTimeout(() => {
     setAlgorithmMode('none')
     setLoading(false)
-  }
+  }, 2000)
+}
 
   const handleRepairNext = async () => {
     if (!cityState) return
@@ -267,62 +272,129 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-bg-primary">
-      {/* Navbar */}
-      <nav className="sticky top-4 mx-4 px-6 py-4 flex items-center justify-between z-50 rounded-2xl border border-border-subtle bg-panel-nav shadow-sm">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 bg-accent rounded-xl flex items-center justify-center text-white font-bold text-lg shadow-md">G</div>
-          <div>
-            <h1 className="text-xl font-bold text-text-primary">GridPulse</h1>
-            <p className="text-xs text-text-secondary">Power Grid Simulator</p>
-          </div>
-        </div>
-        <div className="flex items-center gap-6">
-          {algorithmMode === 'storm' && <span className="text-danger font-semibold animate-pulse">🌪️ Storm Active</span>}
-          {algorithmMode === 'repairing' && <span className="text-warning font-semibold animate-pulse">🔧 Repairing</span>}
-          {algorithmMode === 'bfs' && <span className="text-info font-semibold">🔍 BFS Running</span>}
-          {algorithmMode === 'dfs' && <span className="text-info font-semibold">🔍 DFS Running</span>}
-          {dijkstraMode === 'selecting' && (
-            <span className="text-accent font-semibold animate-pulse">
-              {!dijkstraSource ? '👆 Click SOURCE building' : `👆 Now click TARGET for ${dijkstraSource.name}`}
-            </span>
-          )}
-          <div className="text-right">
-            <p className="text-xs text-text-secondary">Grid Health</p>
-            <p className="text-2xl font-bold" style={{ color: health > 80 ? '#22C55E' : health > 50 ? '#F59E0B' : '#EF4444' }}>
-              {health.toFixed(0)}%
-            </p>
-          </div>
-        </div>
-      </nav>
+{/* Navbar */}
+<nav className="sticky top-3 mx-4 px-5 py-2.5 flex items-center justify-between z-50 rounded-2xl border border-amber-200 bg-gradient-to-r from-amber-100/90 via-orange-100/80 to-amber-100/90 backdrop-blur-sm shadow-sm overflow-hidden">
+  
+  {/* Subtle flowing background animation */}
+  <div className="absolute inset-0 pointer-events-none">
+    <div className="absolute inset-0 opacity-20"
+      style={{
+        background: `
+          radial-gradient(circle at 20% 50%, #FF7A18 0%, transparent 50%),
+          radial-gradient(circle at 50% 50%, #FFB347 0%, transparent 50%),
+          radial-gradient(circle at 80% 50%, #FF7A18 0%, transparent 50%)
+        `,
+        animation: 'headerGlow 8s ease-in-out infinite',
+        backgroundSize: '200% 200%',
+      }}
+    />
+  </div>
+
+  <div className="relative flex items-center gap-3">
+    {/* Logo image with subtle shadow */}
+    <div className="relative">
+      <img 
+        src="/icons/logo.png" 
+        alt="GridPulse" 
+        className="w-8 h-8 rounded-lg object-cover shadow-sm"
+        onError={(e) => {
+          (e.target as HTMLImageElement).style.display = 'none'
+        }}
+      />
+      <div className="w-8 h-8 bg-gradient-to-br from-accent to-accent-light rounded-lg flex items-center justify-center text-white font-bold text-sm shadow-sm logo-fallback">
+        G
+      </div>
+    </div>
+    
+    <div>
+      <h1 className="text-base font-bold text-text-primary leading-tight">GridPulse</h1>
+      <p className="text-[10px] text-text-secondary">Power Grid Simulator</p>
+    </div>
+  </div>
+
+  {/* Center — Flowing light particles */}
+  <div className="flex-1 flex items-center justify-center px-6 relative h-8 overflow-hidden">
+    {[...Array(30)].map((_, i) => (
+      <div
+        key={i}
+        className="absolute rounded-full"
+        style={{
+          width: `${3 + Math.sin(i * 0.7) * 2}px`,
+          height: `${3 + Math.sin(i * 0.7) * 2}px`,
+          left: `${(i / 30) * 100}%`,
+          backgroundColor: i % 3 === 0 ? '#d46210' : i % 3 === 1 ? '#ee9415' : '#f8d71d',
+          opacity: 0,
+          animation: `floatUp ${2 + Math.sin(i) * 1.5}s ease-in-out ${i * 0.2}s infinite`,
+          boxShadow: i % 2 === 0 ? '0 0 4px rgba(187, 88, 18, 0.4)' : 'none',
+        }}
+      />
+    ))}
+  </div>
+
+  {/* Right — Status + Health */}
+  <div className="relative flex items-center gap-5">
+    {algorithmMode === 'storm' && (
+      <span className="text-danger font-semibold text-[11px] animate-pulse bg-red-50 px-2 py-0.5 rounded-full">Storm Active</span>
+    )}
+    {algorithmMode === 'repairing' && (
+      <span className="text-warning font-semibold text-[11px] animate-pulse bg-amber-50 px-2 py-0.5 rounded-full">Repairing</span>
+    )}
+    {algorithmMode === 'bfs' && (
+      <span className="text-info font-semibold text-[11px] bg-blue-50 px-2 py-0.5 rounded-full">BFS Active</span>
+    )}
+    {algorithmMode === 'dfs' && (
+      <span className="text-info font-semibold text-[11px] bg-blue-50 px-2 py-0.5 rounded-full">DFS Active</span>
+    )}
+    {dijkstraMode === 'selecting' && (
+      <span className="text-accent font-semibold text-[11px] animate-pulse bg-orange-50 px-2 py-0.5 rounded-full">
+        {!dijkstraSource ? 'Select source' : 'Select target'}
+      </span>
+    )}
+    
+    <div className="text-right">
+      <p className="text-[10px] text-text-secondary leading-tight">Grid Health</p>
+      <p 
+        className="text-xl font-bold leading-tight"
+        style={{ color: health > 80 ? '#22C55E' : health > 50 ? '#F59E0B' : '#EF4444' }}
+      >
+        {health.toFixed(0)}%
+      </p>
+    </div>
+  </div>
+</nav>
 
       {/* Main Layout */}
-      <div className="flex gap-4 p-4 h-[calc(100vh-100px)]">
+      <div className="flex gap-4 p-4 h-[calc(100vh-72px)]">
         {/* Left Panel - Controls */}
         <div className="w-48 p-4 flex flex-col gap-2 rounded-2xl border border-panel-controls bg-panel-controls shadow-sm">
           <h2 className="text-sm font-semibold text-text-secondary mb-2">CONTROLS</h2>
-          <button onClick={handleGenerate} disabled={loading} className="btn-primary">🏗️ Generate</button>
-          <button onClick={handleStorm} disabled={!cityState || loading} className="btn-danger">🌪️ Storm</button>
-          <button onClick={handleRepairNext} disabled={!cityState || loading} className="btn-warning">🔧 Repair Next</button>
-          <button onClick={handleRepairAuto} disabled={!cityState || loading} className="btn-warning">🤖 Auto Repair</button>
+          <button onClick={handleGenerate} disabled={loading} className="btn-primary"> Generate City</button>
+          <button onClick={handleStorm} disabled={!cityState || loading} className="btn-danger"> Storm</button>
+          <button onClick={handleRepairNext} disabled={!cityState || loading} className="btn-warning"> Repair Next</button>
+          <button onClick={handleRepairAuto} disabled={!cityState || loading} className="btn-warning"> Auto Repair</button>
           <div className="border-t border-border-subtle my-2" />
-          <button onClick={handleBFS} disabled={!cityState || loading} className="btn-info">🔍 BFS</button>
-          <button onClick={handleDFS} disabled={!cityState || loading} className="btn-info">🔍 DFS</button>
+          <button onClick={handleBFS} disabled={!cityState || loading} className="btn-info"> BFS</button>
+          <button onClick={handleDFS} disabled={!cityState || loading} className="btn-info"> DFS</button>
           <button 
             onClick={handleDijkstraClick} 
             disabled={!cityState || loading} 
             className={`btn-info ${dijkstraMode === 'selecting' ? 'ring-2 ring-info ring-offset-1' : ''}`}
           >
-            🗺️ Dijkstra
+             Dijkstra
           </button>
           <div className="border-t border-border-subtle my-2" />
           <button onClick={clearSelections} className="btn-ghost text-xs">✕ Clear Selection</button>
           <div className="border-t border-border-subtle my-2" />
-          <button 
-            onClick={() => setShowResistance(!showResistance)} 
-            className={`text-xs ${showResistance ? 'btn-info' : 'btn-ghost'}`}
-          >
-            {showResistance ? '🔢 Hide Resistance' : '🔢 Show Resistance'}
-          </button>
+<button 
+  onClick={() => setShowResistance(!showResistance)} 
+  className={`w-full px-3 py-2 text-xs font-medium rounded-xl transition-all duration-200 border
+    ${showResistance 
+      ? 'bg-amber-100 text-amber-800 border-amber-300 hover:bg-amber-200' 
+      : 'bg-stone-100 text-stone-700 border-stone-300 hover:bg-stone-200'
+    }`}
+>
+  {showResistance ? 'Hide Resistance' : 'Show Resistance'}
+</button>
         </div>
 
         {/* Center - City Map */}

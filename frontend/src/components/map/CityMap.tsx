@@ -58,18 +58,39 @@ export default function CityMap({
     isPanning.current = false
   }
 
-  if (!cityState || cityState.vertices.length === 0) {
-    return (
-      <div className="flex items-center justify-center h-full text-text-secondary">
-        <div className="text-center">
-          <p className="text-4xl mb-3">🏙️</p>
-          <p className="text-lg font-semibold">No City Generated</p>
-          <p className="text-sm">Click "Generate" to create a city grid</p>
-        </div>
+if (!cityState || cityState.vertices.length === 0) {
+  return (
+    <div className="relative flex items-center justify-center h-full w-full overflow-hidden rounded-xl">
+      {/* Background image — fills entire container */}
+      <img 
+        src="/icons/city.png" 
+        alt="City background"
+        className="absolute inset-0 w-full h-full object-cover"
+        onError={(e) => {
+          // Fallback if image not found
+          (e.target as HTMLImageElement).style.display = 'none'
+        }}
+      />
+      
+      {/* Dark overlay for text readability */}
+      <div className="absolute inset-0 bg-black/50" />
+      
+      {/* Fallback gradient if image fails */}
+      <div className="absolute inset-0 bg-gradient-to-br from-gray-800 via-gray-700 to-gray-900 city-fallback" />
+      
+      {/* Centered text */}
+      <div className="relative z-10 text-center px-8">
+       
+        <p className="text-2xl font-bold text-white mb-2 drop-shadow-lg">
+          No City Generated
+        </p>
+        <p className="text-base text-white/80 drop-shadow-md">
+          Click "Generate" to create a city grid
+        </p>
       </div>
-    )
-  }
-
+    </div>
+  )
+}
   // Build lookup maps
   const vertexMap = new Map(cityState.vertices.map(v => [v.id, v]))
   const highlightedSet = new Set(highlightedVertices)
@@ -126,14 +147,46 @@ export default function CityMap({
         ))}
       </g>
 
-      {/* Zoom controls */}
-      <g transform="translate(760, 20)">
-        <rect x={0} y={0} width={30} height={60} rx={8} fill="white" stroke="#E5E7EB" />
-        <text x={15} y={22} textAnchor="middle" fontSize={14} fill="#6B7280" style={{ cursor: 'pointer' }}
-              onClick={() => setZoom(z => Math.min(2.5, z + 0.2))}>+</text>
-        <text x={15} y={48} textAnchor="middle" fontSize={14} fill="#6B7280" style={{ cursor: 'pointer' }}
-              onClick={() => setZoom(z => Math.max(0.3, z - 0.2))}>−</text>
-      </g>
+{/* Zoom controls */}
+<g transform="translate(760, 20)">
+  {/* Background card with shadow */}
+  <rect x={0} y={0} width={36} height={72} rx={12} fill="white" stroke="#E5E7EB" 
+        filter="url(#zoomShadow)" />
+  
+  {/* Shadow filter */}
+  <defs>
+    <filter id="zoomShadow">
+      <feDropShadow dx={0} dy={2} stdDeviation={3} floodOpacity={0.1} />
+    </filter>
+  </defs>
+  
+  {/* Zoom In */}
+  <rect x={4} y={4} width={28} height={28} rx={8} fill="#3B82F6" 
+        style={{ cursor: 'pointer', transition: 'all 0.2s' }}
+        onClick={() => setZoom(z => Math.min(2.5, +(z + 0.15).toFixed(2)))}
+        onMouseEnter={(e) => (e.currentTarget.style.fill = '#2563EB')}
+        onMouseLeave={(e) => (e.currentTarget.style.fill = '#3B82F6')}
+  />
+  <text x={18} y={21} textAnchor="middle" fontSize={14} fill="white" fontWeight="bold"
+        style={{ cursor: 'pointer', pointerEvents: 'none' }}>
+    +
+  </text>
+  
+  {/* Divider */}
+  <line x1={8} y1={36} x2={28} y2={36} stroke="#E5E7EB" strokeWidth={1} />
+  
+  {/* Zoom Out */}
+  <rect x={4} y={40} width={28} height={28} rx={8} fill="#3B82F6"
+        style={{ cursor: 'pointer', transition: 'all 0.2s' }}
+        onClick={() => setZoom(z => Math.max(0.3, +(z - 0.15).toFixed(2)))}
+        onMouseEnter={(e) => (e.currentTarget.style.fill = '#2563EB')}
+        onMouseLeave={(e) => (e.currentTarget.style.fill = '#3B82F6')}
+  />
+  <text x={18} y={58} textAnchor="middle" fontSize={16} fill="white" fontWeight="bold"
+        style={{ cursor: 'pointer', pointerEvents: 'none' }}>
+    −
+  </text>
+</g>
 
       {/* Hover tooltip */}
       {(hoveredVertex || hoveredEdge) && (
