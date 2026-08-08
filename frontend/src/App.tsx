@@ -1,9 +1,12 @@
-import { useState, useCallback } from 'react'
+
+import { useState, useCallback , useEffect} from 'react'
 import type { GraphState, Vertex, Edge, AlgorithmMode, EventLogEntry, BFSResult, DFSResult, DijkstraResult } from './types/grid'
 import { generateCity, triggerStorm, repairNext, repairAuto, runBFS, runDFS, runDijkstra } from './lib/api'
 import CityMap from './components/map/CityMap'
 import InfoCard from './components/panels/InfoCard'
 import StormOverlay from './components/animations/StormOverlay'
+import PathModal from './components/panels/PathModal'
+
 
 export default function App() {
   const [cityState, setCityState] = useState<GraphState | null>(null)
@@ -23,10 +26,21 @@ export default function App() {
   const [highlightedVertices, setHighlightedVertices] = useState<number[]>([])
   const [pathVertices, setPathVertices] = useState<number[]>([])
   const [pathEdges, setPathEdges] = useState<number[]>([])
+  const [showPathModal, setShowPathModal] = useState(false)
+  const [pathSource, setPathSource] = useState<Vertex | null>(null)
+  const [pathTarget, setPathTarget] = useState<Vertex | null>(null)
+  const [selectedAlgorithm, setSelectedAlgorithm] = useState<string>('dijkstra')
 
   const addEvent = (icon: string, message: string) => {
     setEventLog(prev => [{ id: Date.now(), timestamp: new Date().toLocaleTimeString(), icon, message }, ...prev].slice(0, 50))
   }
+
+  const ALGORITHMS = [
+  { id: 'dijkstra', name: "Dijkstra's Algorithm", description: 'Shortest path by resistance', icon: '⚡' },
+  { id: 'bfs', name: 'Breadth-First Search', description: 'Shortest path by hops', icon: '🔍' },
+  { id: 'dfs', name: 'Depth-First Search', description: 'Deep exploration path', icon: '🌿' },
+  { id: 'kruskal', name: "Kruskal's MST", description: 'Minimum spanning tree route', icon: '🌲' },
+]
 
   const clearSelections = () => {
     setSelectedVertex(null)
@@ -42,6 +56,17 @@ export default function App() {
   // ACTIONS
   // ==========================================
 
+  function recalculatePower(vertices: Vertex[], edges: Edge[]): Vertex[] {
+  // A vertex is powered if it has at least one active edge
+  return vertices.map(v => {
+    const hasActiveEdge = edges.some(
+      e => e.status === 0 && (e.source === v.id || e.destination === v.id)
+    )
+    // Power plants and substations are always powered
+    const isSource = v.type === 0 || v.type === 1
+    return { ...v, powered: isSource || hasActiveEdge }
+  })
+}
   const handleGenerate = async () => {
     setLoading(true)
     clearSelections()
@@ -69,17 +94,24 @@ const handleStorm = async () => {
       if (!prev) return prev
       const brokenIds = new Set(stormData.brokenLines.map((bl: { id: number }) => bl.id))
       const affectedIds = new Set(stormData.affectedFacilities.map((af: { id: number }) => af.id))
+      
+      // Update edges first
+      const updatedEdges = prev.edges.map(edge =>
+        brokenIds.has(edge.id) ? { ...edge, status: 1, statusName: 'Broken' } : edge
+      )
+      
+      // Update vertices - mark affected as unpowered, then recalculate
+      const updatedVertices = prev.vertices.map(vertex =>
+        affectedIds.has(vertex.id) ? { ...vertex, powered: false } : vertex
+      )
+      
       return {
         ...prev,
         activeEdges: prev.edgeCount - stormData.totalLinesBroken,
         brokenEdges: stormData.totalLinesBroken,
         health: stormData.gridHealthAfter,
-        edges: prev.edges.map(edge =>
-          brokenIds.has(edge.id) ? { ...edge, status: 1, statusName: 'Broken' } : edge
-        ),
-        vertices: prev.vertices.map(vertex =>
-          affectedIds.has(vertex.id) ? { ...vertex, powered: false } : vertex
-        ),
+        edges: updatedEdges,
+        vertices: recalculatePower(updatedVertices, updatedEdges),
       }
     })
     setHealth(stormData.gridHealthAfter)
@@ -95,64 +127,75 @@ const handleStorm = async () => {
   }, 2000)
 }
 
-  const handleRepairNext = async () => {
-    if (!cityState) return
-    setLoading(true)
-    setAlgorithmMode('repairing')
-    try {
-      const data = await repairNext()
-      if (data.totalRepaired > 0 && data.repairOrder.length > 0) {
-        const repairedId = data.repairOrder[0].id
-        setCityState(prev => {
-          if (!prev) return prev
-          return {
-            ...prev,
-            activeEdges: prev.activeEdges + 1,
-            brokenEdges: prev.brokenEdges - 1,
-            health: data.gridHealthAfter,
-            edges: prev.edges.map(edge =>
-              edge.id === repairedId ? { ...edge, status: 0, statusName: 'Active' } : edge
-            ),
-          }
-        })
-        setHealth(data.gridHealthAfter)
-      }
-      addEvent('🔧', `Repaired 1 line, health: ${data.gridHealthAfter.toFixed(0)}%`)
-    } catch {
-      addEvent('❌', 'Repair failed')
-    }
-    setAlgorithmMode('none')
-    setLoading(false)
-  }
-
-  const handleRepairAuto = async () => {
-    if (!cityState) return
-    setLoading(true)
-    setAlgorithmMode('repairing')
-    try {
-      const data = await repairAuto()
-      const repairedIds = new Set(data.repairOrder.map((e: { id: number }) => e.id))
+const handleRepairNext = async () => {
+  if (!cityState) return
+  setLoading(true)
+  setAlgorithmMode('repairing')
+  try {
+    const data = await repairNext()
+    if (data.totalRepaired > 0 && data.repairOrder.length > 0) {
+      const repairedEdge = data.repairOrder[0]
+      const repairedId = repairedEdge.id
+      
       setCityState(prev => {
         if (!prev) return prev
+        
+        // Update the repaired edge to active
+        const updatedEdges = prev.edges.map(e =>
+          e.id === repairedId ? { ...e, status: 0, statusName: 'Active' } : e
+        )
+        
         return {
           ...prev,
-          activeEdges: prev.activeEdges + data.totalRepaired,
-          brokenEdges: Math.max(0, prev.brokenEdges - data.totalRepaired),
+          activeEdges: prev.activeEdges + 1,
+          brokenEdges: Math.max(0, prev.brokenEdges - 1),
           health: data.gridHealthAfter,
-          edges: prev.edges.map(edge =>
-            repairedIds.has(edge.id) ? { ...edge, status: 0, statusName: 'Active' } : edge
-          ),
-          vertices: prev.vertices.map(v => ({ ...v, powered: true })),
+          edges: updatedEdges,
+          vertices: recalculatePower(prev.vertices, updatedEdges),
         }
       })
       setHealth(data.gridHealthAfter)
-      addEvent('🔧', `Auto-repaired ${data.totalRepaired} lines, health: ${data.gridHealthAfter.toFixed(0)}%`)
-    } catch {
-      addEvent('❌', 'Auto-repair failed')
     }
-    setAlgorithmMode('none')
-    setLoading(false)
+    addEvent('🔧', `Repaired 1 line, health: ${data.gridHealthAfter.toFixed(0)}%`)
+  } catch {
+    addEvent('❌', 'Repair failed')
   }
+  setAlgorithmMode('none')
+  setLoading(false)
+}
+
+const handleRepairAuto = async () => {
+  if (!cityState) return
+  setLoading(true)
+  setAlgorithmMode('repairing')
+  try {
+    const data = await repairAuto()
+    const repairedIds = new Set(data.repairOrder.map((e: { id: number }) => e.id))
+    setCityState(prev => {
+      if (!prev) return prev
+      
+      // Update all repaired edges to active
+      const updatedEdges = prev.edges.map(edge =>
+        repairedIds.has(edge.id) ? { ...edge, status: 0, statusName: 'Active' } : edge
+      )
+      
+      return {
+        ...prev,
+        activeEdges: prev.activeEdges + data.totalRepaired,
+        brokenEdges: Math.max(0, prev.brokenEdges - data.totalRepaired),
+        health: data.gridHealthAfter,
+        edges: updatedEdges,
+        vertices: recalculatePower(prev.vertices, updatedEdges),
+      }
+    })
+    setHealth(data.gridHealthAfter)
+    addEvent('🔧', `Auto-repaired ${data.totalRepaired} lines, health: ${data.gridHealthAfter.toFixed(0)}%`)
+  } catch {
+    addEvent('❌', 'Auto-repair failed')
+  }
+  setAlgorithmMode('none')
+  setLoading(false)
+}
 
   const handleBFS = async () => {
     if (!cityState) return
@@ -202,62 +245,84 @@ const handleStorm = async () => {
   // VERTEX / EDGE CLICK HANDLERS
   // ==========================================
 
-  const handleVertexClick = useCallback(async (vertex: Vertex) => {
-    setSelectedEdge(null)
+const handleVertexClick = useCallback(async (vertex: Vertex) => {
+  setSelectedEdge(null)
 
-    // Dijkstra mode
-    if (dijkstraMode === 'selecting') {
-      if (!dijkstraSource) {
-        // First click = source
-        setDijkstraSource(vertex)
-        setSelectedVertex(vertex)
-        addEvent('🗺️', `Source: ${vertex.name}. Now click TARGET building.`)
-        return
-      }
-      
-      if (dijkstraSource.id === vertex.id) {
-        addEvent('⚠️', 'Source and target must be different buildings')
-        return
-      }
-
-      // Second click = target
+  // If path modal is open, use clicks for source/target
+  if (showPathModal) {
+    if (!pathSource) {
+      setPathSource(vertex)
       setSelectedVertex(vertex)
-      setAlgorithmMode('dijkstra')
-      addEvent('🗺️', `Finding route: ${dijkstraSource.name} → ${vertex.name}`)
-      
-      try {
-        const data: DijkstraResult = await runDijkstra(dijkstraSource.id, vertex.id)
-        if (data.pathExists && data.path.length > 0) {
-          setPathVertices(data.path.map((v: Vertex) => v.id))
-          const edgeIds: number[] = []
-          for (let i = 0; i < data.path.length - 1; i++) {
-            const fromId = data.path[i].id
-            const toId = data.path[i + 1].id
-            const edge = cityState?.edges.find(
-              e => (e.source === fromId && e.destination === toId) || (e.source === toId && e.destination === fromId)
-            )
-            if (edge) edgeIds.push(edge.id)
-          }
-          setPathEdges(edgeIds)
-          addEvent('✅', `Route found: ${data.pathLength} hops, ${data.totalResistance.toFixed(1)}Ω`)
-        } else {
-          addEvent('❌', 'No path exists — buildings may be disconnected after storm damage')
-        }
-      } catch {
-        addEvent('❌', 'Dijkstra failed')
-      }
-      
-      setDijkstraMode('none')
-      setDijkstraSource(null)
-      setAlgorithmMode('none')
-      setTimeout(() => { setPathVertices([]); setPathEdges([]) }, 8000)
-      return
+    } else if (!pathTarget && vertex.id !== pathSource.id) {
+      setPathTarget(vertex)
+      setSelectedVertex(vertex)
     }
+    return
+  }
 
-    // Normal click
-    setDijkstraSource(vertex)
-    setSelectedVertex(vertex)
-  }, [dijkstraMode, dijkstraSource, cityState])
+  // Normal click
+  setSelectedVertex(vertex)
+}, [showPathModal, pathSource, pathTarget])
+
+  const handleCheckPath = async () => {
+  if (!pathSource || !pathTarget) {
+    addEvent('⚠️', 'Please select both source and target buildings')
+    return
+  }
+  
+  if (pathSource.id === pathTarget.id) {
+    addEvent('⚠️', 'Source and target must be different')
+    return
+  }
+
+  setAlgorithmMode('dijkstra')
+  addEvent('🗺️', `Finding ${selectedAlgorithm} path: ${pathSource.name} → ${pathTarget.name}`)
+  
+  try {
+    let data: DijkstraResult | BFSResult
+    
+    if (selectedAlgorithm === 'dijkstra') {
+      data = await runDijkstra(pathSource.id, pathTarget.id)
+      if ((data as DijkstraResult).pathExists && (data as DijkstraResult).path.length > 0) {
+        const path = (data as DijkstraResult).path
+        setPathVertices(path.map((v: Vertex) => v.id))
+        const edgeIds: number[] = []
+        for (let i = 0; i < path.length - 1; i++) {
+          const edge = cityState?.edges.find(
+            e => (e.source === path[i].id && e.destination === path[i+1].id) || 
+                 (e.source === path[i+1].id && e.destination === path[i].id)
+          )
+          if (edge) edgeIds.push(edge.id)
+        }
+        setPathEdges(edgeIds)
+        addEvent('✅', `Route found: ${(data as DijkstraResult).pathLength} hops, ${(data as DijkstraResult).totalResistance.toFixed(1)}Ω`)
+      } else {
+        addEvent('❌', 'No path exists — buildings may be disconnected')
+      }
+    } else if (selectedAlgorithm === 'bfs') {
+      data = await runBFS(pathSource.id)
+      if ((data as BFSResult).distances[pathTarget.id] !== -1) {
+        setHighlightedVertices((data as BFSResult).visitedOrder)
+        addEvent('✅', `BFS: Target reachable in ${(data as BFSResult).distances[pathTarget.id]} hops`)
+      } else {
+        addEvent('❌', 'Target not reachable from source')
+      }
+    }
+  } catch {
+    addEvent('❌', 'Path finding failed')
+  }
+  
+  setShowPathModal(false)
+  setPathSource(null)
+  setPathTarget(null)
+  setAlgorithmMode('none')
+  
+  setTimeout(() => {
+    setPathVertices([])
+    setPathEdges([])
+    setHighlightedVertices([])
+  }, 8000)
+}
 
   const handleEdgeClick = useCallback((edge: Edge) => {
     setSelectedVertex(null)
@@ -373,18 +438,18 @@ const handleStorm = async () => {
           <button onClick={handleRepairNext} disabled={!cityState || loading} className="btn-warning"> Repair Next</button>
           <button onClick={handleRepairAuto} disabled={!cityState || loading} className="btn-warning"> Auto Repair</button>
           <div className="border-t border-border-subtle my-2" />
-          <button onClick={handleBFS} disabled={!cityState || loading} className="btn-info"> BFS</button>
-          <button onClick={handleDFS} disabled={!cityState || loading} className="btn-info"> DFS</button>
-          <button 
-            onClick={handleDijkstraClick} 
-            disabled={!cityState || loading} 
-            className={`btn-info ${dijkstraMode === 'selecting' ? 'ring-2 ring-info ring-offset-1' : ''}`}
-          >
-             Dijkstra
-          </button>
-          <div className="border-t border-border-subtle my-2" />
-          <button onClick={clearSelections} className="btn-ghost text-xs">✕ Clear Selection</button>
-          <div className="border-t border-border-subtle my-2" />
+<button 
+  onClick={() => {
+    setShowPathModal(true)
+    setPathSource(null)
+    setPathTarget(null)
+    setSelectedAlgorithm('dijkstra')
+  }}
+  disabled={!cityState || loading} 
+  className="btn-info"
+>
+  Check Path
+</button>
 <button 
   onClick={() => setShowResistance(!showResistance)} 
   className={`w-full px-3 py-2 text-xs font-medium rounded-xl transition-all duration-200 border
@@ -448,6 +513,17 @@ const handleStorm = async () => {
             </div>
           </div>
         </div>
+        {/* Path Finding Modal */}
+<PathModal
+  isOpen={showPathModal}
+  onClose={() => { setShowPathModal(false); setPathSource(null); setPathTarget(null) }}
+  source={pathSource}
+  target={pathTarget}
+  selectedAlgorithm={selectedAlgorithm}
+  onAlgorithmChange={setSelectedAlgorithm}
+  onFindPath={handleCheckPath}
+  algorithms={ALGORITHMS}
+/>
       </div>
     </div>
   )
