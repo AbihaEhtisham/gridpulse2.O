@@ -12,9 +12,10 @@ interface PowerLineProps {
   isInPath: boolean
   onClick: (edge: Edge) => void
   onHover: (edge: Edge | null) => void
+  showResistance: boolean
 }
 
-export default function PowerLine({ edge, sourceX, sourceY, destX, destY, isSelected, isInPath, onClick, onHover }: PowerLineProps) {
+export default function PowerLine({ edge, sourceX, sourceY, destX, destY, isSelected, isInPath, onClick, onHover, showResistance }: PowerLineProps) {
   const color = EDGE_STATUS_COLORS[edge.status] || '#999'
   const strokeW = isSelected || isInPath ? 3.5 : 2
   
@@ -78,25 +79,29 @@ export default function PowerLine({ edge, sourceX, sourceY, destX, destY, isSele
         </line>
       )}
 
-      {/* Hover tooltip */}
-      <g style={{ pointerEvents: 'none' }}>
-        <text x={midX} y={midY - 6} textAnchor="middle" fontSize={8} fill="#6B7280">
-          {edge.resistance.toFixed(1)}Ω
-        </text>
-      </g>
+      {/* Resistance label */}
+      {showResistance && (
+        <g style={{ pointerEvents: 'none' }}>
+          <rect x={midX - 18} y={midY - 16} width={36} height={14} rx={4} fill="white" fillOpacity={0.9} />
+          <text x={midX} y={midY - 5} textAnchor="middle" fontSize={8} fill="#6B7280" fontWeight={600}>
+            {edge.resistance.toFixed(1)}Ω
+          </text>
+        </g>
+      )}
+
       {/* Repair animation */}
-{edge.status === 3 && (
-  <motion.line
-    x1={sourceX} y1={sourceY}
-    x2={destX} y2={destY}
-    stroke="#F97316"
-    strokeWidth={4}
-    strokeLinecap="round"
-    initial={{ opacity: 0 }}
-    animate={{ opacity: [0, 1, 0.5, 1] }}
-    transition={{ duration: 0.8, repeat: 2 }}
-  />
-)}
+      {edge.status === 3 && (
+        <motion.line
+          x1={sourceX} y1={sourceY}
+          x2={destX} y2={destY}
+          stroke="#F97316"
+          strokeWidth={4}
+          strokeLinecap="round"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: [0, 1, 0.5, 1] }}
+          transition={{ duration: 0.8, repeat: 2 }}
+        />
+      )}
     </motion.g>
   )
 }

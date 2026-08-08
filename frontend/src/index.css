@@ -71,6 +71,21 @@ body {
   @apply px-3 py-2 text-text-secondary text-xs rounded-xl
          hover:bg-gray-100 transition-all duration-200;
 }
+
+/* Panel background colors */
+.bg-panel-controls { background: #FFF5F0; }
+.bg-panel-map { background: #FFFFFF; }
+.bg-panel-info { background: #F0FAF8; }
+.bg-panel-stats { background: #F8F5FF; }
+.bg-panel-events { background: #F5F8FF; }
+.bg-panel-nav { background: #FFFFFF; }
+
+/* Subtle borders matching each panel */
+.border-panel-controls { border-color: #FDE8DB; }
+.border-panel-info { border-color: #D4EFEA; }
+.border-panel-stats { border-color: #EBE5FA; }
+.border-panel-events { border-color: #E0E8FA; }
+
 /* ============================================
    ANIMATIONS
    ============================================ */

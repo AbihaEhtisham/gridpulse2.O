@@ -9,7 +9,7 @@ interface InfoCardProps {
 export default function InfoCard({ selectedVertex, selectedEdge }: InfoCardProps) {
   if (!selectedVertex && !selectedEdge) {
     return (
-      <div className="glass-card p-4">
+      <div className="p-4 space-y-4 rounded-2xl border border-panel-info bg-panel-info shadow-sm">
         <h2 className="text-sm font-semibold text-text-secondary mb-3">SELECTION INFO</h2>
         <p className="text-xs text-text-secondary">Click a building or power line to see details</p>
       </div>

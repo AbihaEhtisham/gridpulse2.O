@@ -17,6 +17,7 @@ export default function App() {
   // Selection state
   const [selectedVertex, setSelectedVertex] = useState<Vertex | null>(null)
   const [selectedEdge, setSelectedEdge] = useState<Edge | null>(null)
+  const [showResistance, setShowResistance] = useState(false)
 
   // Algorithm results
   const [highlightedVertices, setHighlightedVertices] = useState<number[]>([])
@@ -267,7 +268,7 @@ export default function App() {
   return (
     <div className="min-h-screen bg-bg-primary">
       {/* Navbar */}
-      <nav className="glass-card sticky top-4 mx-4 px-6 py-4 flex items-center justify-between z-50">
+      <nav className="sticky top-4 mx-4 px-6 py-4 flex items-center justify-between z-50 rounded-2xl border border-border-subtle bg-panel-nav shadow-sm">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 bg-accent rounded-xl flex items-center justify-center text-white font-bold text-lg shadow-md">G</div>
           <div>
@@ -297,7 +298,7 @@ export default function App() {
       {/* Main Layout */}
       <div className="flex gap-4 p-4 h-[calc(100vh-100px)]">
         {/* Left Panel - Controls */}
-        <div className="glass-card w-48 p-4 flex flex-col gap-2">
+        <div className="w-48 p-4 flex flex-col gap-2 rounded-2xl border border-panel-controls bg-panel-controls shadow-sm">
           <h2 className="text-sm font-semibold text-text-secondary mb-2">CONTROLS</h2>
           <button onClick={handleGenerate} disabled={loading} className="btn-primary">🏗️ Generate</button>
           <button onClick={handleStorm} disabled={!cityState || loading} className="btn-danger">🌪️ Storm</button>
@@ -315,10 +316,17 @@ export default function App() {
           </button>
           <div className="border-t border-border-subtle my-2" />
           <button onClick={clearSelections} className="btn-ghost text-xs">✕ Clear Selection</button>
+          <div className="border-t border-border-subtle my-2" />
+          <button 
+            onClick={() => setShowResistance(!showResistance)} 
+            className={`text-xs ${showResistance ? 'btn-info' : 'btn-ghost'}`}
+          >
+            {showResistance ? '🔢 Hide Resistance' : '🔢 Show Resistance'}
+          </button>
         </div>
 
         {/* Center - City Map */}
-        <div className="flex-1 glass-card overflow-hidden relative">
+        <div className="flex-1 overflow-hidden relative rounded-2xl border border-border-subtle bg-panel-map shadow-sm">
           <CityMap
             cityState={cityState}
             selectedVertex={selectedVertex}
@@ -328,6 +336,7 @@ export default function App() {
             pathEdges={pathEdges}
             onVertexClick={handleVertexClick}
             onEdgeClick={handleEdgeClick}
+            showResistance={showResistance}
           />
           <StormOverlay isActive={algorithmMode === 'storm'} severity={65} />
         </div>
@@ -336,7 +345,7 @@ export default function App() {
         <div className="w-64 flex flex-col gap-4">
           <InfoCard selectedVertex={selectedVertex} selectedEdge={selectedEdge} health={health} />
           
-          <div className="glass-card p-4">
+          <div className="p-4 rounded-2xl border border-panel-stats bg-panel-stats shadow-sm">
             <h2 className="text-sm font-semibold text-text-secondary mb-3">STATS</h2>
             {cityState ? (
               <div className="space-y-2 text-sm">
@@ -350,7 +359,7 @@ export default function App() {
             )}
           </div>
 
-          <div className="glass-card p-4 flex-1 overflow-hidden flex flex-col">
+          <div className="p-4 flex-1 overflow-hidden flex flex-col rounded-2xl border border-panel-events bg-panel-events shadow-sm">
             <h2 className="text-sm font-semibold text-text-secondary mb-3">EVENT LOG</h2>
             <div className="flex-1 overflow-y-auto space-y-2 text-xs">
               {eventLog.length === 0 ? (

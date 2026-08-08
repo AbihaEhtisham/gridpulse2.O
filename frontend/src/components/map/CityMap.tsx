@@ -12,6 +12,7 @@ interface CityMapProps {
   pathEdges: number[]
   onVertexClick: (vertex: Vertex) => void
   onEdgeClick: (edge: Edge) => void
+  showResistance: boolean
 }
 
 export default function CityMap({
@@ -23,6 +24,7 @@ export default function CityMap({
   pathEdges,
   onVertexClick,
   onEdgeClick,
+  showResistance,
 }: CityMapProps) {
   const [hoveredVertex, setHoveredVertex] = useState<Vertex | null>(null)
   const [hoveredEdge, setHoveredEdge] = useState<Edge | null>(null)
@@ -85,7 +87,7 @@ export default function CityMap({
       onMouseMove={handleMouseMove}
       onMouseUp={handleMouseUp}
       onMouseLeave={handleMouseUp}
-      style={{ background: '#FAFAFA', borderRadius: 12, cursor: isPanning.current ? 'grabbing' : 'grab' }}
+      style={{ background: '#FFFFFF', borderRadius: 12, cursor: isPanning.current ? 'grabbing' : 'grab' }}
     >
       <g transform={`translate(${pan.x},${pan.y}) scale(${zoom})`}>
         {/* Edges */}
@@ -105,6 +107,7 @@ export default function CityMap({
               isInPath={pathEdgeSet.has(edge.id)}
               onClick={onEdgeClick}
               onHover={(e) => setHoveredEdge(e)}
+              showResistance={showResistance}
             />
           )
         })}
