@@ -13,6 +13,7 @@ interface CityMapProps {
   onVertexClick: (vertex: Vertex) => void
   onEdgeClick: (edge: Edge) => void
   showResistance: boolean
+  scissorsMode?: boolean  // ← ADDED
 }
 
 export default function CityMap({
@@ -25,6 +26,7 @@ export default function CityMap({
   onVertexClick,
   onEdgeClick,
   showResistance,
+  scissorsMode = false,  // ← ADDED with default
 }: CityMapProps) {
   const [hoveredVertex, setHoveredVertex] = useState<Vertex | null>(null)
   const [hoveredEdge, setHoveredEdge] = useState<Edge | null>(null)
@@ -98,6 +100,14 @@ if (!cityState || cityState.vertices.length === 0) {
   const pathVertexSet = new Set(pathVertices)
   const pathEdgeSet = new Set(pathEdges)
 
+  // Determine cursor style
+  const getCursor = () => {
+    if (scissorsMode) {
+      return "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24'%3E%3Ctext y='20' font-size='20'%3E✂️%3C/text%3E%3C/svg%3E\") 0 20, crosshair";
+    }
+    return isPanning.current ? 'grabbing' : 'grab';
+  };
+
   return (
     <svg
       width="100%"
@@ -109,7 +119,7 @@ if (!cityState || cityState.vertices.length === 0) {
       onMouseMove={handleMouseMove}
       onMouseUp={handleMouseUp}
       onMouseLeave={handleMouseUp}
-      style={{ background: '#FFFFFF', borderRadius: 12, cursor: isPanning.current ? 'grabbing' : 'grab' }}
+      style={{ background: '#FFFFFF', borderRadius: 12, cursor: getCursor() }}
     >
       {/* Grid background image — behind everything */}
       <image

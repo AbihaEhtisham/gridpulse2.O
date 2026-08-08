@@ -6,6 +6,11 @@ const API = axios.create({
   timeout: 30000,
 })
 
+export async function breakEdge(edgeId: number): Promise<any> {
+  const { data } = await API.post('/api/break-edge', { edgeId })
+  return data
+}
+
 export async function generateCity(seed: number = 42): Promise<GraphState> {
   const { data } = await API.post('/api/generate', { seed })
   return data

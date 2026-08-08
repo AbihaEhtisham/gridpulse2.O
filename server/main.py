@@ -14,6 +14,7 @@ from engine_bridge import (
     repair_next, repair_auto, run_bfs, run_dfs,
     run_dijkstra, get_health
 )
+from pydantic import BaseModel
 
 app = FastAPI(
     title="GridPulse API",
@@ -94,4 +95,15 @@ async def grid_health():
     result = get_health()
     if not result["success"]:
         raise HTTPException(status_code=500, detail=result["error"])
+    return result["data"]
+
+class BreakEdgeRequest(BaseModel):
+    edgeId: int
+
+@app.post("/api/break-edge")
+async def break_edge_endpoint(req: BreakEdgeRequest):
+    from engine_bridge import break_edge
+    result = break_edge(req.edgeId)
+    if not result["success"]:
+        raise HTTPException(status_code=400, detail=result["error"])
     return result["data"]

@@ -187,6 +187,51 @@ def repair_auto():
     }
 
 
+def break_edge(edge_id):
+    """Break a specific edge."""
+    global _city_state
+    if not _city_state:
+        return {"success": False, "error": "No city generated"}
+    
+    edges = _city_state.get("edges", [])
+    
+    for e in edges:
+        if e["id"] == edge_id and e.get("status") == 0:
+            e["status"] = 1
+            e["statusName"] = "Broken"
+            
+            # Update vertex power
+            dest_id = e["destination"]
+            for v in _city_state.get("vertices", []):
+                if v["id"] == dest_id:
+                    # Check if this vertex has other active edges
+                    has_other_active = any(
+                        edge["id"] != edge_id and edge["status"] == 0 and 
+                        (edge["source"] == dest_id or edge["destination"] == dest_id)
+                        for edge in edges
+                    )
+                    if not has_other_active:
+                        v["powered"] = False
+                    break
+            
+            _city_state["activeEdges"] = len([ed for ed in edges if ed.get("status") == 0])
+            _city_state["brokenEdges"] = len([ed for ed in edges if ed.get("status") == 1])
+            _city_state["health"] = calculate_health(_city_state)
+            
+            return {"success": True, "data": {"brokenEdge": e}}
+    
+    return {"success": False, "error": "Edge not found or already broken"}
+
+
+def calculate_health(state):
+    """Recalculate grid health."""
+    total = state.get("edgeCount", 1)
+    active = state.get("activeEdges", 0)
+    powered = sum(1 for v in state.get("vertices", []) if v.get("powered"))
+    total_v = state.get("vertexCount", 1)
+    return round((0.5 * active / total + 0.5 * powered / total_v) * 100, 1)
+
+
 # BFS, DFS, Dijkstra — use the C++ engine (they work without persistent state)
 
 def run_bfs(source_id=0):
@@ -234,8 +279,10 @@ def run_bfs(source_id=0):
         }
     }
 
+
 def run_dfs():
     return run_command("dfs")
+
 
 def run_dijkstra(source_id, target_id):
     """Dijkstra on in-memory city state."""
@@ -302,6 +349,7 @@ def run_dijkstra(source_id, target_id):
             "path": path_vertices,
         }
     }
+
 
 def get_health():
     global _city_state

@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect } from 'react'
 import type { GraphState, Vertex, Edge, AlgorithmMode, EventLogEntry, BFSResult, DFSResult, DijkstraResult } from './types/grid'
-import { generateCity, triggerStorm, repairNext, repairAuto, runBFS, runDFS, runDijkstra } from './lib/api'
+import { generateCity, triggerStorm, repairNext, repairAuto, runBFS, runDFS, runDijkstra, breakEdge } from './lib/api'
 import CityMap from './components/map/CityMap'
 import InfoCard from './components/panels/InfoCard'
 import StormOverlay from './components/animations/StormOverlay'
@@ -14,6 +14,7 @@ export default function App() {
   const [health, setHealth] = useState(100)
   const [dijkstraSource, setDijkstraSource] = useState<Vertex | null>(null)
   const [dijkstraMode, setDijkstraMode] = useState<'selecting' | 'none'>('none')
+  const [scissorsMode, setScissorsMode] = useState(false)
 
   // Selection state
   const [selectedVertex, setSelectedVertex] = useState<Vertex | null>(null)
@@ -393,12 +394,40 @@ export default function App() {
     setSelectedVertex(vertex)
   }, [dijkstraMode, dijkstraSource, cityState, pathMode, pathSource])
 
-  const handleEdgeClick = useCallback((edge: Edge) => {
-    setSelectedVertex(null)
-    setDijkstraSource(null)
-    setDijkstraMode('none')
-    setSelectedEdge(edge)
-  }, [])
+const handleEdgeClick = useCallback(async (edge: Edge) => {
+  setSelectedVertex(null)
+  setDijkstraSource(null)
+  setDijkstraMode('none')
+
+  // If scissors mode is active, break this edge
+  if (scissorsMode && edge.status === 0) {
+    try {
+      await breakEdge(edge.id)
+      // Update local state
+      setCityState(prev => {
+        if (!prev) return prev
+        const updatedEdges = prev.edges.map(e =>
+          e.id === edge.id ? { ...e, status: 1, statusName: 'Broken' } : e
+        )
+        return {
+          ...prev,
+          activeEdges: prev.activeEdges - 1,
+          brokenEdges: prev.brokenEdges + 1,
+          edges: updatedEdges,
+          vertices: recalculatePower(prev.vertices, updatedEdges),
+        }
+      })
+      addEvent('✂️', `Broken: ${edge.sourceName} → ${edge.destName}`)
+      setSelectedEdge(null)
+      return
+    } catch {
+      addEvent('❌', 'Failed to break edge')
+    }
+  }
+
+  // Normal edge selection
+  setSelectedEdge(edge)
+}, [scissorsMode])
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -588,7 +617,23 @@ export default function App() {
               🔍 Calculate Path
             </button>
           )}
-
+<button 
+  onClick={() => {
+    setScissorsMode(!scissorsMode)
+    if (!scissorsMode) {
+      addEvent('✂️', 'Break Edge mode: Click any green edge to break it')
+    } else {
+      addEvent('✂️', 'Break Edge mode deactivated')
+    }
+  }}
+  className={`w-full px-3 py-2 text-xs font-medium rounded-xl transition-all duration-200 border
+    ${scissorsMode 
+      ? 'bg-red-100 text-red-700 border-red-300 hover:bg-red-200' 
+      : 'bg-stone-100 text-stone-600 border-stone-200 hover:bg-stone-200'
+    }`}
+>
+  ✂️ {scissorsMode ? 'Break Mode ON' : 'Break Edge'}
+</button>
           <button 
             onClick={() => setShowResistance(!showResistance)} 
             className={`w-full px-3 py-2 text-xs font-medium rounded-xl transition-all duration-200 border
@@ -613,6 +658,7 @@ export default function App() {
             onVertexClick={handleVertexClick}
             onEdgeClick={handleEdgeClick}
             showResistance={showResistance}
+            scissorsMode={scissorsMode} 
           />
           <StormOverlay isActive={algorithmMode === 'storm'} severity={65} />
         </div>
