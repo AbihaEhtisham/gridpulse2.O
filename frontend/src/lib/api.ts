@@ -11,6 +11,11 @@ export async function breakEdge(edgeId: number): Promise<any> {
   return data
 }
 
+export async function getRepairReport(): Promise<any> {
+  const { data } = await API.get('/api/repair-report')
+  return data
+}
+
 export async function generateCity(seed: number = 42): Promise<GraphState> {
   const { data } = await API.post('/api/generate', { seed })
   return data
@@ -53,5 +58,25 @@ export async function runDijkstra(sourceId: number, targetId: number): Promise<D
 
 export async function getGridHealth(): Promise<HealthData> {
   const { data } = await API.get('/api/grid-health')
+  return data
+}
+
+export async function runMinHeap(): Promise<any> {
+  const { data } = await API.get('/api/min-heap')
+  return data
+}
+
+export async function runUnionFind(): Promise<any> {
+  const { data } = await API.get('/api/union-find')
+  return data
+}
+
+export async function runKruskal(): Promise<any> {
+  const { data } = await API.get('/api/kruskal')
+  return data
+}
+
+export async function runDFSPath(sourceId: number, targetId: number): Promise<any> {
+  const { data } = await API.post('/api/dfs-path', { sourceId, targetId })
   return data
 }

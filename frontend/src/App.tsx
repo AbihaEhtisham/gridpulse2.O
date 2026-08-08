@@ -1,10 +1,11 @@
 import { useState, useCallback, useEffect } from 'react'
 import type { GraphState, Vertex, Edge, AlgorithmMode, EventLogEntry, BFSResult, DFSResult, DijkstraResult } from './types/grid'
-import { generateCity, triggerStorm, repairNext, repairAuto, runBFS, runDFS, runDijkstra, breakEdge } from './lib/api'
+import { generateCity, triggerStorm, repairNext, repairAuto, runBFS, runDFS, runDijkstra, breakEdge, getRepairReport, runMinHeap, runUnionFind, runKruskal, runDFSPath } from './lib/api'
 import CityMap from './components/map/CityMap'
 import InfoCard from './components/panels/InfoCard'
 import StormOverlay from './components/animations/StormOverlay'
 // Remove: import PathModal from './components/panels/PathModal'
+import { generateRepairPDF } from './lib/generatePDF'
 
 export default function App() {
   const [cityState, setCityState] = useState<GraphState | null>(null)
@@ -37,12 +38,14 @@ export default function App() {
     setEventLog(prev => [{ id: Date.now(), timestamp: new Date().toLocaleTimeString(), icon, message }, ...prev].slice(0, 50))
   }
 
-  const ALGORITHMS = [
-    { id: 'dijkstra', name: "Dijkstra's Algorithm", description: 'Shortest path by resistance' },
-    { id: 'bfs', name: 'Breadth-First Search', description: 'Shortest path by hops' },
-    { id: 'dfs', name: 'Depth-First Search', description: 'Deep exploration path', },
-    { id: 'kruskal', name: "Kruskal's MST", description: 'Minimum spanning tree route' },
-  ]
+const ALGORITHMS = [
+  { id: 'dijkstra', name: "Dijkstra's Algorithm", description: 'Shortest path by resistance', type: 'path' },
+  { id: 'bfs', name: 'Breadth-First Search', description: 'Shortest path by hops', type: 'path' },
+  { id: 'dfs', name: 'Depth-First Search', description: 'Deep exploration path',  type: 'path' },
+  { id: 'kruskal', name: "Kruskal's MST", description: 'Minimum spanning tree', type: 'analysis' },
+  { id: 'min-heap', name: 'Min-Heap Priority Queue', description: 'Repair priority ordering', type: 'analysis' },
+  { id: 'union-find', name: 'Union-Find (Disjoint Set)', description: 'Connected components', type: 'analysis' },
+]
 
   const clearSelections = () => {
     setSelectedVertex(null)
@@ -130,41 +133,46 @@ export default function App() {
     }, 2000)
   }
 
-  const handleRepairNext = async () => {
-    if (!cityState) return
-    setLoading(true)
-    setAlgorithmMode('repairing')
-    try {
-      const data = await repairNext()
-      if (data.totalRepaired > 0 && data.repairOrder.length > 0) {
-        const repairedEdge = data.repairOrder[0]
-        const repairedId = repairedEdge.id
+const handleRepairNext = async () => {
+  if (!cityState) return
+  setLoading(true)
+  setAlgorithmMode('repairing')
+  try {
+    const data = await repairNext()
+    if (data.totalRepaired > 0 && data.repairOrder.length > 0) {
+      const repairedEdge = data.repairOrder[0]
+      const repairedId = repairedEdge.id
+      const info = data.repairedEdge  // ← NEW: edge details
+      
+      setCityState(prev => {
+        if (!prev) return prev
         
-        setCityState(prev => {
-          if (!prev) return prev
-          
-          const updatedEdges = prev.edges.map(e =>
-            e.id === repairedId ? { ...e, status: 0, statusName: 'Active' } : e
-          )
-          
-          return {
-            ...prev,
-            activeEdges: prev.activeEdges + 1,
-            brokenEdges: Math.max(0, prev.brokenEdges - 1),
-            health: data.gridHealthAfter,
-            edges: updatedEdges,
-            vertices: recalculatePower(prev.vertices, updatedEdges),
-          }
-        })
-        setHealth(data.gridHealthAfter)
-      }
-      addEvent('🔧', `Repaired 1 line, health: ${data.gridHealthAfter.toFixed(0)}%`)
-    } catch {
-      addEvent('❌', 'Repair failed')
+        const updatedEdges = prev.edges.map(e =>
+          e.id === repairedId ? { ...e, status: 0, statusName: 'Active' } : e
+        )
+        
+        return {
+          ...prev,
+          activeEdges: prev.activeEdges + 1,
+          brokenEdges: Math.max(0, prev.brokenEdges - 1),
+          health: data.gridHealthAfter,
+          edges: updatedEdges,
+          vertices: recalculatePower(prev.vertices, updatedEdges),
+        }
+      })
+      setHealth(data.gridHealthAfter)
+      
+      // ← NEW: Detailed event log
+      addEvent('🔧', `Repaired: ${info.sourceName} → ${info.destName} (${info.destType}, Priority: ${info.priority}, ${info.resistance}Ω) — Health: ${data.gridHealthAfter}%`)
+    } else {
+      addEvent('🔧', 'No broken lines to repair')
     }
-    setAlgorithmMode('none')
-    setLoading(false)
+  } catch {
+    addEvent('❌', 'Repair failed')
   }
+  setAlgorithmMode('none')
+  setLoading(false)
+}
 
   const handleRepairAuto = async () => {
     if (!cityState) return
@@ -243,77 +251,165 @@ export default function App() {
   }
 
   // Start path finding mode
-  const startPathMode = () => {
-    setPathMode('selecting')
-    setPathSource(null)
-    setPathTarget(null)
-    setPathVertices([])
-    setPathEdges([])
-    setSelectedVertex(null)
-    setSelectedEdge(null)
-    addEvent('🗺️', 'Select source building on the map')
+const startPathMode = () => {
+  const needsSelection = ['dijkstra', 'bfs', 'dfs'].includes(selectedAlgorithm)
+  
+  if (!needsSelection) {
+    // Analysis algorithms — run immediately
+    handleFindPath()
+    return
   }
+  
+  setPathMode('selecting')
+  setPathSource(null)
+  setPathTarget(null)
+  setPathVertices([])
+  setPathEdges([])
+  setSelectedVertex(null)
+  setSelectedEdge(null)
+  addEvent('🗺️', 'Select source building on the map')
+}
 
   // Handle path finding
-  const handleFindPath = async () => {
-    if (!pathSource || !pathTarget) {
-      addEvent('⚠️', 'Please select both source and target buildings')
-      return
-    }
-    
-    if (pathSource.id === pathTarget.id) {
-      addEvent('⚠️', 'Source and target must be different')
-      return
-    }
-
-    setAlgorithmMode('dijkstra')
-    addEvent('🗺️', `Finding ${selectedAlgorithm} path: ${pathSource.name} → ${pathTarget.name}`)
-    
-    try {
-      let data: DijkstraResult | BFSResult
-    
-      if (selectedAlgorithm === 'dijkstra') {
-        data = await runDijkstra(pathSource.id, pathTarget.id)
-        if ((data as DijkstraResult).pathExists && (data as DijkstraResult).path.length > 0) {
-          const path = (data as DijkstraResult).path
-          setPathVertices(path.map((v: Vertex) => v.id))
-          const edgeIds: number[] = []
-          for (let i = 0; i < path.length - 1; i++) {
-            const edge = cityState?.edges.find(
-              e => (e.source === path[i].id && e.destination === path[i+1].id) || 
-                   (e.source === path[i+1].id && e.destination === path[i].id)
-            )
-            if (edge) edgeIds.push(edge.id)
-          }
-          setPathEdges(edgeIds)
-          addEvent('✅', `Route found: ${(data as DijkstraResult).pathLength} hops, ${(data as DijkstraResult).totalResistance.toFixed(1)}Ω`)
-        } else {
-          addEvent('❌', 'No path exists — buildings may be disconnected')
-        }
-      } else if (selectedAlgorithm === 'bfs') {
-        data = await runBFS(pathSource.id)
-        if ((data as BFSResult).distances[pathTarget.id] !== -1) {
-          setHighlightedVertices((data as BFSResult).visitedOrder)
-          addEvent('✅', `BFS: Target reachable in ${(data as BFSResult).distances[pathTarget.id]} hops`)
-        } else {
-          addEvent('❌', 'Target not reachable from source')
-        }
-      }
-    } catch {
-      addEvent('❌', 'Path finding failed')
-    }
-    
-    setPathMode('idle')
-    setPathSource(null)
-    setPathTarget(null)
-    setAlgorithmMode('none')
-    
-    setTimeout(() => {
-      setPathVertices([])
-      setPathEdges([])
-      setHighlightedVertices([])
-    }, 8000)
+const handleFindPath = async () => {
+  const needsSelection = ['dijkstra', 'bfs', 'dfs'].includes(selectedAlgorithm)
+  
+  if (needsSelection && (!pathSource || !pathTarget)) {
+    addEvent('⚠️', 'Please select source and target buildings')
+    return
   }
+
+  setAlgorithmMode('dijkstra')
+  
+  try {
+    if (selectedAlgorithm === 'dijkstra' && pathSource && pathTarget) {
+      const data = await runDijkstra(pathSource.id, pathTarget.id)
+      if (data.pathExists && data.path.length > 0) {
+        setPathVertices(data.path.map((v: Vertex) => v.id))
+        const edgeIds: number[] = []
+        const currentEdges = cityState?.edges || []
+        for (let i = 0; i < data.path.length - 1; i++) {
+          const edge = currentEdges.find(
+            e => (e.source === data.path[i].id && e.destination === data.path[i+1].id) || 
+                 (e.source === data.path[i+1].id && e.destination === data.path[i].id)
+          )
+          if (edge) edgeIds.push(edge.id)
+        }
+        setPathEdges(edgeIds)
+        addEvent('✅', `Dijkstra: ${data.pathLength} hops, ${data.totalResistance.toFixed(1)}Ω`)
+      } else {
+        addEvent('❌', 'No path exists')
+      }
+    }
+else if (selectedAlgorithm === 'bfs' && pathSource && pathTarget) {
+  const data = await runBFS(pathSource.id)
+  if (data.distances && data.distances[pathTarget.id] !== -1) {
+    // Reconstruct BFS path from parent info
+    // BFS API returns visitedOrder and distances, we need to rebuild the path
+    setHighlightedVertices(data.visitedOrder)
+    
+    // For BFS path, we need to find the actual path edges
+    // Use Dijkstra for path, BFS for visited visualization
+    const dijData = await runDijkstra(pathSource.id, pathTarget.id)
+    if (dijData.pathExists && dijData.path.length > 0) {
+      setPathVertices(dijData.path.map((v: Vertex) => v.id))
+      const edgeIds: number[] = []
+      const currentEdges = cityState?.edges || []
+      for (let i = 0; i < dijData.path.length - 1; i++) {
+        const edge = currentEdges.find(
+          e => (e.source === dijData.path[i].id && e.destination === dijData.path[i+1].id) || 
+               (e.source === dijData.path[i+1].id && e.destination === dijData.path[i].id)
+        )
+        if (edge) edgeIds.push(edge.id)
+      }
+      setPathEdges(edgeIds)
+    }
+    
+    addEvent('✅', `BFS: Target reachable in ${data.distances[pathTarget.id]} hops. Visited ${data.reachableCount} vertices.`)
+  } else {
+    addEvent('❌', 'Target not reachable from source')
+  }
+}
+    else if (selectedAlgorithm === 'dfs' && pathSource && pathTarget) {
+      const data = await runDFSPath(pathSource.id, pathTarget.id)
+      if (data.pathExists && data.path.length > 0) {
+        setHighlightedVertices(data.visitedOrder)
+        setPathVertices(data.path.map((v: Vertex) => v.id))
+        const edgeIds: number[] = []
+        const currentEdges = cityState?.edges || []
+        for (let i = 0; i < data.path.length - 1; i++) {
+          const edge = currentEdges.find(
+            e => (e.source === data.path[i].id && e.destination === data.path[i+1].id) || 
+                 (e.source === data.path[i+1].id && e.destination === data.path[i].id)
+          )
+          if (edge) edgeIds.push(edge.id)
+        }
+        setPathEdges(edgeIds)
+        addEvent('✅', `DFS: Path found. ${data.visitedCount} vertices explored, ${data.pathLength} hops.`)
+      } else {
+        addEvent('❌', 'DFS: Target not reachable')
+      }
+    }
+    else if (selectedAlgorithm === 'min-heap') {
+      const data = await runMinHeap()
+      if (data.queue && data.queue.length > 0) {
+        const top = data.queue[0]
+        addEvent('📋', `Min-Heap: ${data.totalItems} lines in repair queue. Top priority: ${top.destName} (Priority ${top.priority}). Higher priority buildings may already be powered.`)
+      } else {
+        addEvent('📋', 'Min-Heap: No broken edges to prioritize')
+      }
+    }
+    else if (selectedAlgorithm === 'union-find') {
+      const data = await runUnionFind()
+      if (data.components && data.components.length > 0) {
+        // Highlight the largest component's vertices
+        const largestComp = data.components[0]
+        const compVertexIds: number[] = []
+        largestComp.members.forEach((name: string) => {
+          const v = cityState?.vertices.find(vert => vert.name === name)
+          if (v) compVertexIds.push(v.id)
+        })
+        setHighlightedVertices(compVertexIds)
+        addEvent('🔗', `Union-Find: ${data.totalComponents} components. Largest: ${data.largestComponent} vertices (highlighted blue).`)
+      } else {
+        addEvent('🔗', 'Union-Find: All vertices in single component.')
+      }
+    }
+    else if (selectedAlgorithm === 'kruskal') {
+      const data = await runKruskal()
+      if (data.mst && data.mst.length > 0) {
+        // Highlight MST edges in gold
+        const mstEdgeIds: number[] = data.mst.map((e: any) => e.lineId)
+        setPathEdges(mstEdgeIds)
+        // Highlight all vertices in the MST
+        const mstVertexIds = new Set<number>()
+        data.mst.forEach((e: any) => {
+          const src = cityState?.vertices.find(v => v.name === e.sourceName)
+          const dst = cityState?.vertices.find(v => v.name === e.destName)
+          if (src) mstVertexIds.add(src.id)
+          if (dst) mstVertexIds.add(dst.id)
+        })
+        setPathVertices(Array.from(mstVertexIds))
+        addEvent('🌲', `Kruskal MST: ${data.mstEdges} edges, ${data.totalResistance}Ω total. Minimum cost backbone highlighted.`)
+      } else {
+        addEvent('🌲', `Kruskal MST: ${data.mstEdges} edges, ${data.totalResistance}Ω total`)
+      }
+    }
+  } catch {
+    addEvent('❌', 'Algorithm execution failed')
+  }
+  
+  setPathMode('idle')
+  setPathSource(null)
+  setPathTarget(null)
+  setAlgorithmMode('none')
+  
+  setTimeout(() => {
+    setPathVertices([])
+    setPathEdges([])
+    setHighlightedVertices([])
+  }, 10000)
+}
 
   // ==========================================
   // VERTEX / EDGE CLICK HANDLERS
@@ -556,6 +652,25 @@ const handleEdgeClick = useCallback(async (edge: Edge) => {
           <button onClick={handleStorm} disabled={!cityState || loading} className="btn-danger"> Storm</button>
           <button onClick={handleRepairNext} disabled={!cityState || loading} className="btn-warning"> Repair Next</button>
           <button onClick={handleRepairAuto} disabled={!cityState || loading} className="btn-warning"> Auto Repair</button>
+          <button 
+  onClick={async () => {
+    if (!cityState || cityState.brokenEdges === 0) {
+      addEvent('⚠️', 'No broken edges to report')
+      return
+    }
+    try {
+      const report = await getRepairReport()
+      generateRepairPDF(report)
+      addEvent('📄', 'Repair priority report generated')
+    } catch {
+      addEvent('❌', 'Failed to generate report')
+    }
+  }}
+  disabled={!cityState || (cityState.brokenEdges === 0) || loading}
+  className="w-full px-3 py-2 text-xs font-medium rounded-xl transition-all duration-200 border bg-purple-50 text-purple-700 border-purple-200 hover:bg-purple-100"
+>
+  📄 Repair Report
+</button>
           
           <div className="border-t border-border-subtle my-2" />
           
@@ -600,13 +715,14 @@ const handleEdgeClick = useCallback(async (edge: Edge) => {
   )}
 </div>
 
-          <button 
-            onClick={startPathMode}
-            disabled={!cityState || loading || pathMode === 'selecting' || pathMode === 'ready'} 
-            className={`btn-info ${(pathMode === 'selecting' || pathMode === 'ready') ? 'ring-2 ring-accent ring-offset-1' : ''}`}
-          >
-            {pathMode === 'selecting' ? 'Selecting...' : pathMode === 'ready' ? 'Ready!' : 'Find Path'}
-          </button>
+ <button 
+  onClick={startPathMode}
+  disabled={!cityState || loading || pathMode === 'selecting' || pathMode === 'ready'} 
+  className={`btn-info ${(pathMode === 'selecting' || pathMode === 'ready') ? 'ring-2 ring-accent ring-offset-1' : ''}`}
+>
+  {pathMode === 'selecting' ? 'Selecting...' : pathMode === 'ready' ? 'Ready!' : 
+   ['dijkstra', 'bfs', 'dfs'].includes(selectedAlgorithm) ? 'Find Path' : 'Run Analysis'}
+</button>
 
           {pathMode === 'ready' && (
             <button 

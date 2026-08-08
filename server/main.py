@@ -107,3 +107,47 @@ async def break_edge_endpoint(req: BreakEdgeRequest):
     if not result["success"]:
         raise HTTPException(status_code=400, detail=result["error"])
     return result["data"]
+
+@app.get("/api/repair-report")
+async def repair_report():
+    """Generate detailed repair priority report."""
+    from engine_bridge import generate_repair_report
+    result = generate_repair_report()
+    if not result["success"]:
+        raise HTTPException(status_code=400, detail=result["error"])
+    return result["data"]
+
+@app.get("/api/min-heap")
+async def min_heap_demo():
+    from engine_bridge import run_min_heap_demo
+    result = run_min_heap_demo()
+    if not result["success"]:
+        raise HTTPException(status_code=400, detail=result["error"])
+    return result["data"]
+
+@app.get("/api/union-find")
+async def union_find_demo():
+    from engine_bridge import run_union_find_demo
+    result = run_union_find_demo()
+    if not result["success"]:
+        raise HTTPException(status_code=400, detail=result["error"])
+    return result["data"]
+
+@app.get("/api/kruskal")
+async def kruskal_demo():
+    from engine_bridge import run_kruskal_demo
+    result = run_kruskal_demo()
+    if not result["success"]:
+        raise HTTPException(status_code=400, detail=result["error"])
+    return result["data"]
+class RouteRequest(BaseModel):
+    sourceId: int
+    targetId: int
+
+@app.post("/api/dfs-path")
+async def dfs_path(req: RouteRequest):
+    from engine_bridge import run_dfs_path
+    result = run_dfs_path(req.sourceId, req.targetId)
+    if not result["success"]:
+        raise HTTPException(status_code=400, detail=result["error"])
+    return result["data"]
